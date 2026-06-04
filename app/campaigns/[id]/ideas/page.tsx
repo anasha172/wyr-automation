@@ -8,7 +8,7 @@ import { demoStore, isDemoMode, type DemoCampaign, type DemoIdea } from '@/lib/d
 import { Button } from '@/components/ui/button'
 import { WyrIdeaCard } from '@/components/wyr-idea-card'
 import { CampaignPipeline } from '@/components/campaign-pipeline'
-import { Sparkles, Send } from 'lucide-react'
+import { Sparkles, Send, RefreshCw } from 'lucide-react'
 
 export default function IdeasPage() {
   const { id } = useParams<{ id: string }>()
@@ -17,6 +17,7 @@ export default function IdeasPage() {
   const [ideas, setIdeas] = useState<DemoIdea[]>([])
   const [loadingGenerate, setLoadingGenerate] = useState(false)
   const [loadingApproval, setLoadingApproval] = useState(false)
+  const [loadingResend, setLoadingResend] = useState(false)
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
 
   const loadData = useCallback(() => {
@@ -37,7 +38,7 @@ export default function IdeasPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime (only when not in demo mode)
+  // Realtime subscription
   useEffect(() => {
     if (isDemoMode) return
     const supabase = createClient()
@@ -55,33 +56,16 @@ export default function IdeasPage() {
       const res = await fetch('/api/generate-ideas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaignId: id,
-          theme: campaign.theme,
-          tone: campaign.tone,
-          audience: campaign.audience,
-          demoMode: isDemoMode,
-        }),
+        body: JSON.stringify({ campaignId: id, theme: campaign.theme, tone: campaign.tone, audience: campaign.audience, demoMode: isDemoMode }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
 
       if (isDemoMode) {
-        // Clear existing ideas for this campaign then insert new ones
-        const existing = demoStore.ideas.getByCampaign(id)
-        // Remove old and add new via insertMany
-        const rows = data.ideas.map((idea: any) => ({
-          campaign_id: id,
-          option_a: idea.option_a,
-          option_b: idea.option_b,
-          approval_status: 'pending' as const,
-        }))
-        // Overwrite by saving to localStorage directly
+        const rows = data.ideas.map((idea: any) => ({ campaign_id: id, option_a: idea.option_a, option_b: idea.option_b, approval_status: 'pending' as const }))
         const allIdeas = JSON.parse(localStorage.getItem('demo_ideas') ?? '[]')
-        const filtered = allIdeas.filter((i: DemoIdea) => i.campaign_id !== id)
-        localStorage.setItem('demo_ideas', JSON.stringify(filtered))
-        const newIdeas = demoStore.ideas.insertMany(rows)
-        setIdeas(newIdeas)
+        localStorage.setItem('demo_ideas', JSON.stringify(allIdeas.filter((i: DemoIdea) => i.campaign_id !== id)))
+        setIdeas(demoStore.ideas.insertMany(rows))
         demoStore.campaigns.update({ stage: 'ideas_pending' }, id)
       } else {
         setIdeas(data.ideas)
@@ -101,27 +85,19 @@ export default function IdeasPage() {
       const res = await fetch('/api/generate-ideas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaignId: id,
-          theme: campaign.theme,
-          tone: campaign.tone,
-          audience: campaign.audience,
-          regenerate: true,
-          demoMode: isDemoMode,
-        }),
+        body: JSON.stringify({ campaignId: id, theme: campaign.theme, tone: campaign.tone, audience: campaign.audience, regenerate: true, demoMode: isDemoMode }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
 
       if (isDemoMode) {
-        demoStore.ideas.update({ option_a: data.idea.option_a, option_b: data.idea.option_b }, ideaId)
-        setIdeas((prev) => prev.map((i) => (i.id === ideaId ? { ...i, ...data.idea } : i)))
+        demoStore.ideas.update({ option_a: data.idea.option_a, option_b: data.idea.option_b, approval_status: 'pending' }, ideaId)
       } else {
         const supabase = createClient()
-        await supabase.from('wyr_ideas').update({ option_a: data.idea.option_a, option_b: data.idea.option_b }).eq('id', ideaId)
-        setIdeas((prev) => prev.map((i) => (i.id === ideaId ? { ...i, ...data.idea } : i)))
+        await supabase.from('wyr_ideas').update({ option_a: data.idea.option_a, option_b: data.idea.option_b, approval_status: 'pending' }).eq('id', ideaId)
       }
-      toast.success('Idea regenerated')
+      setIdeas((prev) => prev.map((i) => i.id === ideaId ? { ...i, ...data.idea, approval_status: 'pending' as const } : i))
+      toast.success('Idea regenerated — ready to re-send')
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -138,14 +114,42 @@ export default function IdeasPage() {
     }
   }
 
+  // Send only specific ideas to Slack
+  async function sendIdeasToSlack(ideasToSend: DemoIdea[]) {
+    const WEBHOOK = process.env.NEXT_PUBLIC_SLACK_WEBHOOK_URL
+    const blocks: any[] = [
+      { type: 'header', text: { type: 'plain_text', text: '🤔 WYR Ideas — Re-approval Needed', emoji: true } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*Campaign:* ${campaign?.theme}\nPlease review the updated idea${ideasToSend.length > 1 ? 's' : ''} below:` } },
+      { type: 'divider' },
+    ]
+
+    ideasToSend.forEach((idea, i) => {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Idea*\n*A:* ${idea.option_a}\n*B:* ${idea.option_b}` } })
+      blocks.push({
+        type: 'actions',
+        block_id: `idea_${idea.id}`,
+        elements: [
+          { type: 'button', text: { type: 'plain_text', text: '✅ Approve', emoji: true }, style: 'primary', action_id: 'approve_idea', value: JSON.stringify({ ideaId: idea.id, campaignId: id, action: 'approved' }) },
+          { type: 'button', text: { type: 'plain_text', text: '❌ Reject', emoji: true }, style: 'danger', action_id: 'reject_idea', value: JSON.stringify({ ideaId: idea.id, campaignId: id, action: 'rejected' }) },
+        ],
+      })
+      blocks.push({ type: 'divider' })
+    })
+
+    const res = await fetch('/api/send-approval', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId: id, type: 'ideas', managerEmail: '' }),
+    })
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+  }
+
   async function sendForApproval() {
     if (isDemoMode) {
-      // In demo mode: instantly approve all ideas
       setLoadingApproval(true)
       try {
-        ideas.forEach((idea) => {
-          demoStore.ideas.update({ approval_status: 'approved' }, idea.id)
-        })
+        ideas.forEach((idea) => demoStore.ideas.update({ approval_status: 'approved' }, idea.id))
         demoStore.campaigns.update({ stage: 'ideas_approved' }, id)
         setIdeas((prev) => prev.map((i) => ({ ...i, approval_status: 'approved' as const })))
         setCampaign((c) => c ? { ...c, stage: 'ideas_approved' } : c)
@@ -158,18 +162,14 @@ export default function IdeasPage() {
 
     setLoadingApproval(true)
     try {
-      const supabase = createClient()
-      const { data: settings } = await supabase.from('user_settings').select('manager_email').single()
-      if (!settings?.manager_email) throw new Error('Set a manager email in Settings first')
-
       const res = await fetch('/api/send-approval', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId: id, type: 'ideas', managerEmail: settings.manager_email }),
+        body: JSON.stringify({ campaignId: id, type: 'ideas', managerEmail: '' }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      toast.success(`Approval email sent to ${settings.manager_email}`)
+      toast.success('All 5 ideas sent to manager via Slack!')
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -177,7 +177,30 @@ export default function IdeasPage() {
     }
   }
 
+  async function resendRejectedIdea(ideaId: string) {
+    setLoadingResend(true)
+    try {
+      const idea = ideas.find((i) => i.id === ideaId)
+      if (!idea) throw new Error('Idea not found')
+
+      const res = await fetch('/api/send-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: id, type: 'ideas', managerEmail: '', specificIdeaId: ideaId }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      toast.success('Regenerated idea sent to manager!')
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setLoadingResend(false)
+    }
+  }
+
   const allApproved = ideas.length > 0 && ideas.every((i) => i.approval_status === 'approved')
+  const rejectedIdeas = ideas.filter((i) => i.approval_status === 'rejected')
+  const hasRejected = rejectedIdeas.length > 0
   const currentStage = isDemoMode ? demoStore.campaigns.get(id)?.stage ?? campaign?.stage : campaign?.stage
 
   return (
@@ -194,9 +217,11 @@ export default function IdeasPage() {
         {campaign && <CampaignPipeline stage={currentStage ?? campaign.stage} />}
       </div>
 
-      {isDemoMode && (
-        <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-          Demo mode: "Send for Approval" will instantly auto-approve all ideas.
+      {/* Rejected ideas banner */}
+      {hasRejected && (
+        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+          <p className="font-semibold mb-1">⚠️ {rejectedIdeas.length} idea{rejectedIdeas.length > 1 ? 's' : ''} rejected by manager</p>
+          <p>Click the ↻ button on the rejected idea to regenerate it, then click <strong>"Re-send to Manager"</strong>.</p>
         </div>
       )}
 
@@ -226,20 +251,30 @@ export default function IdeasPage() {
             ))}
           </div>
 
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={generateIdeas} disabled={loadingGenerate}>
-              <Sparkles size={14} />
-              {loadingGenerate ? 'Regenerating…' : 'Regenerate All'}
-            </Button>
-            <Button onClick={sendForApproval} disabled={loadingApproval}>
-              <Send size={14} />
-              {loadingApproval ? 'Processing…' : isDemoMode ? 'Auto-Approve (Demo)' : 'Send for Manager Approval'}
-            </Button>
+          <div className="flex gap-3 flex-wrap">
+            {/* Show Send for Approval only when no ideas have been sent yet */}
+            {ideas.every(i => i.approval_status === 'pending') && (
+              <Button onClick={sendForApproval} disabled={loadingApproval}>
+                <Send size={14} />
+                {loadingApproval ? 'Sending…' : isDemoMode ? 'Auto-Approve (Demo)' : 'Send All to Manager'}
+              </Button>
+            )}
+
+            {/* Show Re-send button when there are regenerated (pending) ideas after rejection */}
+            {hasRejected === false && ideas.some(i => i.approval_status === 'pending') && ideas.some(i => i.approval_status === 'approved') && (
+              <Button onClick={() => {
+                const pendingIdea = ideas.find(i => i.approval_status === 'pending')
+                if (pendingIdea) resendRejectedIdea(pendingIdea.id)
+              }} disabled={loadingResend} variant="outline">
+                <RefreshCw size={14} />
+                {loadingResend ? 'Sending…' : 'Re-send to Manager'}
+              </Button>
+            )}
           </div>
 
           {allApproved && (
             <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
-              <span className="text-green-800 font-semibold">All ideas approved!</span>
+              <span className="text-green-800 font-semibold">🎉 All ideas approved!</span>
               <Button variant="success" onClick={() => router.push(`/campaigns/${id}/images`)}>
                 Find Images →
               </Button>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
-import { regenerateSingleIdea } from '@/lib/claude'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,20 +11,21 @@ export async function POST(req: NextRequest) {
     const payload = JSON.parse(payloadRaw)
     const supabase = createServiceClient()
     const WEBHOOK = process.env.SLACK_WEBHOOK_URL!
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wyr-automation.vercel.app'
 
     if (payload.type === 'block_actions') {
       for (const action of payload.actions) {
         const value = JSON.parse(action.value)
         const { ideaId, campaignId, action: status } = value
 
-        if (status === 'approved') {
-          // Mark idea as approved
-          await supabase
-            .from('wyr_ideas')
-            .update({ approval_status: 'approved' })
-            .eq('id', ideaId)
+        // Update idea status in DB
+        await supabase
+          .from('wyr_ideas')
+          .update({ approval_status: status })
+          .eq('id', ideaId)
 
-          // Check if ALL 5 ideas are now approved
+        if (status === 'approved') {
+          // Check if ALL ideas are now approved
           const { data: ideas } = await supabase
             .from('wyr_ideas')
             .select('approval_status')
@@ -43,45 +43,12 @@ export async function POST(req: NextRequest) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                text: `🎉 *All ${ideas!.length} ideas approved!* Campaign is ready for image selection.`,
+                text: `🎉 *All ${ideas!.length} ideas approved!* Campaign is ready for image selection.\n<${APP_URL}/campaigns/${campaignId}/images|Go to Images →>`,
               }),
             })
           }
         } else if (status === 'rejected') {
-          // Get campaign info for regeneration
-          const { data: campaign } = await supabase
-            .from('campaigns')
-            .select('theme, tone, audience')
-            .eq('id', campaignId)
-            .single()
-
-          // Notify Slack that regeneration is happening
-          await fetch(WEBHOOK, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: `🔄 Idea rejected — regenerating a new one for theme: *${campaign?.theme}*...`,
-            }),
-          })
-
-          // Regenerate the idea using Claude
-          const newIdea = await regenerateSingleIdea(
-            campaign?.theme ?? '',
-            campaign?.tone ?? 'fun',
-            campaign?.audience ?? 'general'
-          )
-
-          // Update the idea in DB and reset to pending
-          await supabase
-            .from('wyr_ideas')
-            .update({
-              option_a: newIdea.option_a,
-              option_b: newIdea.option_b,
-              approval_status: 'pending',
-            })
-            .eq('id', ideaId)
-
-          // Send regenerated idea back to Slack for re-approval
+          // Notify publisher to regenerate manually
           await fetch(WEBHOOK, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -91,31 +58,11 @@ export async function POST(req: NextRequest) {
                   type: 'section',
                   text: {
                     type: 'mrkdwn',
-                    text: `✨ *New idea generated for review:*\n*A:* ${newIdea.option_a}\n*B:* ${newIdea.option_b}`,
+                    text: `❌ *Idea rejected.* The publisher will regenerate and re-send for your approval.\n<${APP_URL}/campaigns/${campaignId}/ideas|Open in App →>`,
                   },
                 },
-                {
-                  type: 'actions',
-                  block_id: `idea_${ideaId}`,
-                  elements: [
-                    {
-                      type: 'button',
-                      text: { type: 'plain_text', text: '✅ Approve', emoji: true },
-                      style: 'primary',
-                      action_id: 'approve_idea',
-                      value: JSON.stringify({ ideaId, campaignId, action: 'approved' }),
-                    },
-                    {
-                      type: 'button',
-                      text: { type: 'plain_text', text: '❌ Reject', emoji: true },
-                      style: 'danger',
-                      action_id: 'reject_idea',
-                      value: JSON.stringify({ ideaId, campaignId, action: 'rejected' }),
-                    },
-                  ],
-                },
               ],
-              text: 'New idea ready for approval',
+              text: 'Idea rejected — publisher will regenerate',
             }),
           })
         }
