@@ -157,16 +157,6 @@ export default function PublishPage() {
           </div>
         </div>
 
-        {idea && (
-          <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Caption Preview</p>
-            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
-              Would You Rather... {idea.option_a} OR {idea.option_b}? 🤔 Comment below!
-              <br />
-              <span className="text-gray-400">#wouldyourather #wyr #instagram</span>
-            </p>
-          </div>
-        )}
 
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2">When to post</p>
