@@ -298,7 +298,7 @@ export default function ImagesPage() {
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
           <span className="text-green-800 font-semibold">Images approved!</span>
           <Button variant="success" onClick={() => router.push(`/campaigns/${id}/design`)}>
-            Open in Canva →
+            Create Story →
           </Button>
         </div>
       )}
