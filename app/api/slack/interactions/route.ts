@@ -23,27 +23,27 @@ export async function POST(req: NextRequest) {
           .update({ approval_status: status })
           .eq('id', ideaId)
 
-        // Check if ALL ideas are now approved
+        // Advance stage when all ideas have been reviewed (approved OR rejected)
         const { data: ideas } = await supabase
           .from('wyr_ideas')
           .select('approval_status')
           .eq('campaign_id', campaignId)
 
-        const allApproved = ideas?.every((i: any) => i.approval_status === 'approved')
-        const anyPending = ideas?.some((i: any) => i.approval_status === 'pending')
+        const noneStillPending = ideas?.every((i: any) => i.approval_status !== 'pending')
+        const approvedCount = ideas?.filter((i: any) => i.approval_status === 'approved').length ?? 0
 
-        if (allApproved) {
+        if (noneStillPending && approvedCount > 0) {
           await supabase
             .from('campaigns')
             .update({ stage: 'ideas_approved' })
             .eq('id', campaignId)
 
-          // Post completion message to Slack
+          // Notify Slack
           await fetch(process.env.SLACK_WEBHOOK_URL!, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              text: `✅ *All ideas approved!* The campaign is ready to move to image selection.`,
+              text: `✅ *Review complete!* ${approvedCount} idea${approvedCount > 1 ? 's' : ''} approved${ideas!.length - approvedCount > 0 ? `, ${ideas!.length - approvedCount} rejected` : ''}. Campaign is ready for image selection.`,
             }),
           })
         }
