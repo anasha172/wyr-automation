@@ -176,10 +176,11 @@ export async function POST(req: NextRequest) {
 
       // Mark stories as assigned to this manager
       if (managerId && ideas?.length) {
-        await supabase
+        const { error: assignErr } = await supabase
           .from('wyr_ideas')
-          .update({ story_assigned_manager_id: managerId, story_sent_to_manager: true })
+          .update({ story_assigned_manager_id: managerId })
           .in('id', ideas.map((i: any) => i.id))
+        if (assignErr) throw new Error(`Failed to assign manager to stories: ${assignErr.message}`)
       }
 
       const { error: stageErr } = await supabase.from('campaigns').update({ stage: 'stories_pending' }).eq('id', campaignId)
