@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
     const { data: urlData } = supabase.storage.from('wyr-designs').getPublicUrl(fileName)
     const publicUrl = urlData.publicUrl
 
-    // Save story URL on the idea row
+    // Save story URL only — status stays null until publisher explicitly sends for approval
     await supabase
       .from('wyr_ideas')
-      .update({ story_image_url: publicUrl, story_approval_status: 'pending' })
+      .update({ story_image_url: publicUrl })
       .eq('id', ideaId)
 
     return NextResponse.json({ publicUrl })

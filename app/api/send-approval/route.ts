@@ -174,11 +174,11 @@ export async function POST(req: NextRequest) {
         .eq('approval_status', 'approved')
         .not('story_image_url', 'is', null)
 
-      // Mark stories as assigned to this manager
+      // Mark stories as assigned to this manager and set status to pending
       if (managerId && ideas?.length) {
         const { error: assignErr } = await supabase
           .from('wyr_ideas')
-          .update({ story_assigned_manager_id: managerId })
+          .update({ story_assigned_manager_id: managerId, story_approval_status: 'pending' })
           .in('id', ideas.map((i: any) => i.id))
         if (assignErr) throw new Error(`Failed to assign manager to stories: ${assignErr.message}`)
       }
