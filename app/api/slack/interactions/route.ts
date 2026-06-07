@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
 
     // ── Block actions ─────────────────────────────────────────────────────────
     if (payload.type === 'block_actions') {
+      const responseUrl = payload.response_url
+
       for (const action of payload.actions) {
         // ── Idea approval ──
         if (action.action_id === 'approve_idea' || action.action_id === 'reject_idea') {
@@ -63,6 +65,18 @@ export async function POST(req: NextRequest) {
           const { ideaId, campaignId, action: status } = value
 
           await supabase.from('wyr_ideas').update({ approval_status: status }).eq('id', ideaId)
+
+          // Update Slack message to confirm action
+          if (responseUrl) {
+            await fetch(responseUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                replace_original: false,
+                text: status === 'approved' ? '✅ Idea approved.' : '❌ Idea rejected.',
+              }),
+            })
+          }
 
           if (status === 'approved') {
             const { data: ideas } = await supabase
@@ -93,49 +107,35 @@ export async function POST(req: NextRequest) {
           const value = JSON.parse(action.value)
           const { ideaId, campaignId } = value
 
-          const { error: ideaErr } = await supabase
-            .from('wyr_ideas')
-            .update({ story_approval_status: 'approved' })
-            .eq('id', ideaId)
+          // 1. Update DB — same lean pattern as ideas
+          await supabase.from('wyr_ideas').update({ story_approval_status: 'approved' }).eq('id', ideaId)
 
-          if (ideaErr) {
-            console.error('approve_story: failed to update idea', ideaErr)
-            continue
+          // 2. Confirm in Slack immediately so manager sees it registered
+          if (responseUrl) {
+            await fetch(responseUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ replace_original: false, text: '✅ Story approved.' }),
+            })
           }
 
-          // Re-fetch all approved ideas for this campaign and check story statuses
-          const { data: ideas, error: ideasErr } = await supabase
+          // 3. Check if all stories for this campaign are now approved
+          const { data: ideas } = await supabase
             .from('wyr_ideas')
-            .select('id, story_approval_status')
+            .select('story_approval_status')
             .eq('campaign_id', campaignId)
             .eq('approval_status', 'approved')
-
-          if (ideasErr) {
-            console.error('approve_story: failed to fetch ideas', ideasErr)
-            continue
-          }
 
           const total = ideas?.length ?? 0
           const approvedCount = ideas?.filter((i: any) => i.story_approval_status === 'approved').length ?? 0
 
-          console.log(`approve_story: ${approvedCount}/${total} stories approved for campaign ${campaignId}`)
-
           if (total > 0 && approvedCount === total) {
-            const { error: campErr } = await supabase
-              .from('campaigns')
-              .update({ stage: 'stories_approved' })
-              .eq('id', campaignId)
-
-            if (campErr) {
-              console.error('approve_story: failed to update campaign stage', campErr)
-            } else {
-              console.log(`approve_story: campaign ${campaignId} → stories_approved`)
-              await fetch(WEBHOOK, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: `🎉 *All stories approved!* Ready to post.\n<${APP_URL}/campaigns/${campaignId}/publish|Post to Instagram →>` }),
-              })
-            }
+            await supabase.from('campaigns').update({ stage: 'stories_approved' }).eq('id', campaignId)
+            await fetch(WEBHOOK, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: `🎉 *All stories approved!* Ready to post.\n<${APP_URL}/campaigns/${campaignId}/publish|Post to Instagram →>` }),
+            })
           }
         }
 
