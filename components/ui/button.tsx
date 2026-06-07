@@ -3,29 +3,104 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+/*
+  Editorial Duel button system.
+
+  Canonical variant names (from wyr.css):
+    ink     — primary dark (bg --ink)
+    a       — flame / Option A accent
+    b       — cobalt / Option B accent
+    go      — green / success / approved
+    ghost   — outlined, transparent bg
+    quiet   — text-only, no border
+
+  Legacy aliases kept so un-restyled pages don't break:
+    default     → ink
+    outline     → ghost
+    destructive → a (flame is the destructive colour in this system)
+    secondary   → paper-2 surface
+    success     → go
+*/
+
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:pointer-events-none disabled:opacity-50',
+  // Base — shared across all variants
+  [
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap leading-none',
+    'font-semibold border cursor-pointer',
+    'transition-all duration-150 active:translate-y-px',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)] focus-visible:ring-offset-1',
+    'disabled:pointer-events-none disabled:opacity-40',
+  ].join(' '),
   {
     variants: {
       variant: {
-        default: 'bg-purple-700 text-white hover:bg-purple-800',
-        outline: 'border border-purple-700 text-purple-700 hover:bg-purple-50',
-        ghost: 'text-purple-700 hover:bg-purple-50',
-        destructive: 'bg-red-600 text-white hover:bg-red-700',
-        secondary: 'bg-purple-100 text-purple-800 hover:bg-purple-200',
-        success: 'bg-green-600 text-white hover:bg-green-700',
+        /* ── Canonical ────────────────────────────────────────── */
+        ink: [
+          'bg-[var(--ink)] text-[var(--paper)] border-transparent',
+          'hover:bg-black',
+        ].join(' '),
+
+        a: [
+          'bg-[var(--a)] text-white border-transparent',
+          'hover:brightness-105',
+        ].join(' '),
+
+        b: [
+          'bg-[var(--b)] text-white border-transparent',
+          'hover:brightness-110',
+        ].join(' '),
+
+        go: [
+          'bg-[var(--go)] text-white border-transparent',
+          'hover:brightness-105',
+        ].join(' '),
+
+        ghost: [
+          'bg-transparent text-[var(--ink)] border-[var(--hair-2)]',
+          'hover:bg-[var(--paper-2)] hover:border-[var(--ink-3)]',
+        ].join(' '),
+
+        quiet: [
+          'bg-transparent text-[var(--ink-2)] border-transparent',
+          'hover:bg-[var(--paper-2)] hover:text-[var(--ink)]',
+        ].join(' '),
+
+        /* ── Legacy aliases ───────────────────────────────────── */
+        default: [
+          'bg-[var(--ink)] text-[var(--paper)] border-transparent',
+          'hover:bg-black',
+        ].join(' '),
+
+        outline: [
+          'bg-transparent text-[var(--ink)] border-[var(--hair-2)]',
+          'hover:bg-[var(--paper-2)] hover:border-[var(--ink-3)]',
+        ].join(' '),
+
+        destructive: [
+          'bg-[var(--a)] text-white border-transparent',
+          'hover:brightness-105',
+        ].join(' '),
+
+        secondary: [
+          'bg-[var(--paper-2)] text-[var(--ink)] border-[var(--hair)]',
+          'hover:bg-[var(--hair)]',
+        ].join(' '),
+
+        success: [
+          'bg-[var(--go)] text-white border-transparent',
+          'hover:brightness-105',
+        ].join(' '),
       },
+
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-8 px-3 text-xs',
-        lg: 'h-12 px-6 text-base',
-        icon: 'h-10 w-10',
+        // Sizes match wyr.css .btn / .btn-sm / .btn-lg exactly
+        default: 'px-[18px] py-[10px] text-[14px] rounded-[9px]',
+        sm:      'px-[13px] py-[7px]  text-[13px] rounded-[8px] gap-1.5',
+        lg:      'px-6      py-[13px] text-[15px] rounded-[9px]',
+        icon:    'w-9 h-9 p-0 rounded-[9px]',
       },
     },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
+    defaultVariants: { variant: 'default', size: 'default' },
   }
 )
 
@@ -39,7 +114,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
     )
   }
 )

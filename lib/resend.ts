@@ -3,17 +3,21 @@ import { Resend } from 'resend'
 export async function sendApprovalEmail(
   to: string,
   campaignTheme: string,
-  approvalType: 'ideas' | 'images',
+  approvalType: 'ideas' | 'images' | 'stories',
   approvalLink: string
 ) {
   const subject =
     approvalType === 'ideas'
       ? `[WYR App] Approval needed: "${campaignTheme}" ideas`
+      : approvalType === 'stories'
+      ? `[WYR App] Story approval needed: "${campaignTheme}"`
       : `[WYR App] Approval needed: "${campaignTheme}" images`
 
   const body =
     approvalType === 'ideas'
       ? `<p>Please review and approve the Would You Rather ideas for the theme: <strong>${campaignTheme}</strong></p>`
+      : approvalType === 'stories'
+      ? `<p>Please review and approve the composed Instagram Stories for: <strong>${campaignTheme}</strong></p>`
       : `<p>Please select your preferred image for each option in the <strong>${campaignTheme}</strong> campaign</p>`
 
   const resend = new Resend(process.env.RESEND_API_KEY)

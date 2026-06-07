@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WYR Kit — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500;1,6..72,600&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="wyr.css" />
+<style>
+  /* ---- Kit doc layout ---- */
+  .kit-shell { display: flex; height: 100vh; overflow: hidden; }
+  .kit-nav {
+    width: 248px; flex-shrink: 0; height: 100vh; border-right: 1px solid var(--hair);
+    display: flex; flex-direction: column; background: var(--paper);
+  }
+  .kit-brand { padding: 26px 24px 20px; border-bottom: 1px solid var(--hair); }
+  .kit-nav-list { flex: 1; overflow-y: auto; padding: 14px 12px; }
+  .kit-nav-item {
+    width: 100%; text-align: left; display: flex; align-items: center; gap: 11px;
+    padding: 8px 12px; border-radius: 8px; border: 0; background: transparent; cursor: pointer;
+    color: var(--ink-2); font-family: var(--sans); font-size: 13.5px; font-weight: 500;
+    transition: background .14s, color .14s;
+  }
+  .kit-nav-item:hover { background: var(--paper-2); color: var(--ink); }
+  .kit-nav-item.active { background: var(--ink); color: var(--paper); }
+  .kit-nav-num { font-size: 10.5px; color: var(--ink-3); }
+  .kit-nav-item.active .kit-nav-num { color: rgba(251,250,247,0.55); }
+  .kit-nav-foot {
+    padding: 14px 22px; border-top: 1px solid var(--hair); font-size: 13px; color: var(--ink-2);
+    text-decoration: none; font-weight: 500;
+  }
+  .kit-nav-foot:hover { color: var(--ink); }
+
+  .kit-main { flex: 1; overflow-y: auto; }
+  .kit-wrap { max-width: 880px; padding: 0 56px 120px; }
+
+  .kit-cover { padding: 64px 0 28px; border-bottom: 1px solid var(--hair); margin-bottom: 12px; }
+  .kit-h1 { font-size: 64px; font-weight: 500; letter-spacing: -0.03em; line-height: 1; margin: 14px 0 0; }
+  .kit-lede { font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 60ch; margin: 18px 0 0; }
+  .kit-lede strong { color: var(--ink); font-weight: 600; }
+  .kit-cover-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 32px; }
+  .kit-meta-k { font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px; }
+  .kit-meta-v { font-size: 13.5px; color: var(--ink); font-weight: 500; }
+
+  .kit-section { padding: 48px 0; border-bottom: 1px solid var(--hair); }
+  .kit-section:last-child { border-bottom: 0; }
+  .kit-h2 { font-size: 34px; font-weight: 500; letter-spacing: -0.025em; margin: 12px 0 0; }
+  .kit-intro { font-size: 16px; line-height: 1.55; color: var(--ink-2); max-width: 64ch; margin: 12px 0 26px; }
+  .kit-block-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 14px; }
+  .kit-foot-note { font-size: 13.5px; color: var(--ink-3); margin-top: 18px; max-width: 64ch; line-height: 1.55; }
+  .kit-code { font-family: var(--mono); font-size: 12px; background: var(--paper-2); border: 1px solid var(--hair); border-radius: 5px; padding: 1px 6px; color: var(--ink); }
+
+  /* swatches */
+  .kit-token-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kit-swatch { display: flex; gap: 11px; align-items: center; }
+  .kit-chip { width: 42px; height: 42px; border-radius: 9px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04); }
+  .kit-duel-tokens { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .kit-duel-tokens .kit-token-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* type */
+  .kit-type-row { display: grid; grid-template-columns: 180px 1fr; gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--hair); align-items: center; }
+  .kit-type-meta { padding-top: 2px; }
+  .kit-scale { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+  .kit-scale-row { display: grid; grid-template-columns: 150px 1fr; gap: 20px; padding: 16px 20px; border-bottom: 1px solid var(--hair); align-items: center; }
+  .kit-scale-row:last-child { border-bottom: 0; }
+  .kit-scale-meta { padding-top: 2px; }
+
+  /* mini grid (radius/shadow) */
+  .kit-mini-grid { display: flex; gap: 26px; flex-wrap: wrap; }
+  .kit-mini { text-align: center; }
+  .kit-mini-demo { height: 56px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+
+  /* demos */
+  .kit-demo { margin-bottom: 18px; }
+  .kit-demo-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  .kit-demo-stage {
+    background: var(--paper-2); border: 1px solid var(--hair); border-radius: 14px;
+    padding: 28px; display: flex; align-items: center; justify-content: center;
+  }
+  .kit-demo-note { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 8px; }
+  .kit-flow { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+
+  /* patterns */
+  .kit-pattern { border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+  .kit-pattern-head { padding: 12px 18px; border-bottom: 1px solid var(--hair); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; background: var(--card); }
+  .kit-num { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--a); }
+  .kit-pattern-demo { padding: 26px; background: var(--paper); }
+
+  /* recipe steps */
+  .kit-steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .kit-steps li { counter-increment: s; position: relative; padding: 14px 0 14px 46px; border-bottom: 1px solid var(--hair); font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
+  .kit-steps li:last-child { border-bottom: 0; }
+  .kit-steps li strong { color: var(--ink); font-weight: 600; }
+  .kit-steps li::before {
+    content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 14px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--a);
+  }
+
+  /* do / dont */
+  .kit-dd { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .kit-do, .kit-dont { border: 1px solid var(--hair); border-radius: 14px; padding: 20px; background: var(--card); }
+  .kit-do { border-color: color-mix(in oklab, var(--go) 28%, var(--hair)); }
+  .kit-dont { border-color: var(--a-line); }
+  .kit-dd-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 12px; }
+  .kit-dd ul { margin: 0; padding-left: 18px; }
+  .kit-dd li { font-size: 13.5px; line-height: 1.7; color: var(--ink-2); }
+
+  @media (max-width: 860px) {
+    .kit-token-grid { grid-template-columns: repeat(2, 1fr); }
+    .kit-duel-tokens { grid-template-columns: 1fr; }
+    .kit-cover-meta { grid-template-columns: 1fr; }
+    .kit-dd { grid-template-columns: 1fr; }
+  }
+</style>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#FBFAF7" />
+    <rect x="22" y="34" width="24" height="32" rx="3" fill="#E8401A" />
+    <rect x="54" y="34" width="24" height="32" rx="3" fill="#2347E6" />
+  </svg>
+</template>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="wyr-data.js"></script>
+<script type="text/babel" src="wyr-ui.jsx"></script>
+<script type="text/babel" src="wyr-kit.jsx"></script>
+</body>
+</html>

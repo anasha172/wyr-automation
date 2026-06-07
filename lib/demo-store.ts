@@ -105,7 +105,11 @@ export interface DemoIdea {
   option_a: string
   option_b: string
   approval_status: 'pending' | 'approved' | 'rejected'
+  sent_to_manager: boolean
   manager_comment?: string
+  story_image_url?: string
+  story_approval_status?: 'pending' | 'approved' | 'rejected'
+  story_rejection_comment?: string
   created_at: string
 }
 
@@ -146,6 +150,8 @@ export const demoStore = {
   ideas: {
     getByCampaign: (campaign_id: string) =>
       getWhere<DemoIdea>('demo_ideas', { campaign_id }),
+    getById: (id: string) =>
+      getWhere<DemoIdea>('demo_ideas', { id })[0] ?? null,
     insert: (row: Omit<DemoIdea, 'id' | 'created_at'>) =>
       insert<DemoIdea>('demo_ideas', row),
     insertMany: (rows: Omit<DemoIdea, 'id' | 'created_at'>[]) =>

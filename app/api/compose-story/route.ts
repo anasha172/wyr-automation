@@ -4,46 +4,30 @@ import { createServiceClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { campaignId, imageUrlA, imageUrlB } = await req.json()
+    const { campaignId, ideaId, imageUrlA, imageUrlB } = await req.json()
 
-    if (!imageUrlA || !imageUrlB) {
-      throw new Error('Both image URLs are required')
-    }
+    if (!imageUrlA || !imageUrlB) throw new Error('Both image URLs are required')
+    if (!ideaId) throw new Error('ideaId is required')
 
-    // Compose the 9:16 story image
     const storyBuffer = await composeStory(imageUrlA, imageUrlB)
 
-    // Upload to Supabase Storage
     const supabase = createServiceClient()
-    const fileName = `stories/${campaignId}-${Date.now()}.jpg`
+    const fileName = `stories/${campaignId}/${ideaId}.jpg`
 
     const { error: uploadError } = await supabase.storage
       .from('wyr-designs')
-      .upload(fileName, storyBuffer, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      })
+      .upload(fileName, storyBuffer, { contentType: 'image/jpeg', upsert: true })
 
     if (uploadError) throw uploadError
 
-    const { data: urlData } = supabase.storage
-      .from('wyr-designs')
-      .getPublicUrl(fileName)
-
+    const { data: urlData } = supabase.storage.from('wyr-designs').getPublicUrl(fileName)
     const publicUrl = urlData.publicUrl
 
-    // Save to posts table
-    await supabase.from('posts').upsert({
-      campaign_id: campaignId,
-      final_image_url: publicUrl,
-      canva_design_id: null,
-    })
-
-    // Advance campaign stage to design_ready
+    // Save story URL on the idea row
     await supabase
-      .from('campaigns')
-      .update({ stage: 'design_ready' })
-      .eq('id', campaignId)
+      .from('wyr_ideas')
+      .update({ story_image_url: publicUrl, story_approval_status: 'pending' })
+      .eq('id', ideaId)
 
     return NextResponse.json({ publicUrl })
   } catch (err: any) {

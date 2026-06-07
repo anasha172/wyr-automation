@@ -32,7 +32,7 @@ export async function generateWYRIdeas(
   theme: string,
   tone: string,
   audience: string
-): Promise<Array<{ option_a: string; option_b: string }>> {
+): Promise<Array<{ title: string; option_a: string; option_b: string; why_it_works: string }>> {
   const text = await chat(
     `You are a creative social media content strategist specializing in viral "Would You Rather" content.
 
@@ -42,24 +42,25 @@ Generate exactly 5 unique and engaging "Would You Rather" questions based on:
 - Target Audience: ${audience}
 
 Rules:
-- Each question should present two genuinely difficult choices (not obvious)
-- Keep each option concise (max 8 words per option)
-- Make them thought-provoking and likely to spark debate
+- Each question must have a punchy title (3-6 words, title case, no punctuation)
+- Each option should be a compelling, concrete scenario (max 12 words)
+- Make choices genuinely difficult — no obvious winner
+- why_it_works: 1 short sentence explaining why this resonates with the target audience
 - Avoid offensive or harmful content
-- Make them relevant for Instagram Stories
+- Make them shareable and debate-worthy for Instagram Stories
 
 Respond ONLY with a valid JSON array, no markdown, no explanation:
 [
-  {"option_a": "...", "option_b": "..."},
-  {"option_a": "...", "option_b": "..."},
-  {"option_a": "...", "option_b": "..."},
-  {"option_a": "...", "option_b": "..."},
-  {"option_a": "...", "option_b": "..."}
+  {
+    "title": "...",
+    "option_a": "...",
+    "option_b": "...",
+    "why_it_works": "..."
+  }
 ]`,
-    1024
+    1500
   )
 
-  // Strip possible markdown code fences
   const clean = text.replace(/```json|```/g, '').trim()
   return JSON.parse(clean)
 }
@@ -76,13 +77,14 @@ Given these two "Would You Rather" options from the theme "${theme}":
 - Option A: "${optionA}"
 - Option B: "${optionB}"
 
-Generate a short, specific Google Images search query for EACH option that will find a visually striking, contextually relevant photo.
+Generate a SHORT Unsplash stock photo search query for EACH option that will return many results.
 
 Rules:
-- 2-5 words per query
-- Focus on the visual subject, not the abstract concept
-- Use concrete nouns (e.g. "gourmet restaurant meal" not "eating out experience")
-- Avoid negative words like "never", "without", "no"
+- 1-3 words ONLY — shorter is better (e.g. "mars planet", "earth space", "moon surface")
+- Use broad, common subject nouns — NOT specific descriptive phrases
+- Think: what single object or scene captures this visually?
+- Unsplash works best with simple terms like "astronaut", "galaxy", "rocket launch"
+- Avoid multi-word phrases longer than 3 words, they return 0 results
 
 Respond ONLY with valid JSON (no markdown):
 {"queryA": "...", "queryB": "..."}`,
@@ -96,11 +98,12 @@ export async function regenerateSingleIdea(
   theme: string,
   tone: string,
   audience: string
-): Promise<{ option_a: string; option_b: string }> {
+): Promise<{ title: string; option_a: string; option_b: string; why_it_works: string }> {
   const text = await chat(
     `Generate ONE unique "Would You Rather" question for theme: ${theme}, tone: ${tone}, audience: ${audience}.
-Respond ONLY with valid JSON (no markdown): {"option_a": "...", "option_b": "..."}`,
-    256
+Include a punchy title (3-6 words), two options (max 12 words each), and a why_it_works sentence.
+Respond ONLY with valid JSON (no markdown): {"title": "...", "option_a": "...", "option_b": "...", "why_it_works": "..."}`,
+    400
   )
   const clean = text.replace(/```json|```/g, '').trim()
   return JSON.parse(clean)
