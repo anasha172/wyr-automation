@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { searchUnsplashImages } from '@/lib/unsplash'
-import { searchGoogleImages } from '@/lib/google-search'
+import { searchPexelsImages } from '@/lib/pexels'
 import { generateImageSearchQueries } from '@/lib/claude'
 import { createServiceClient } from '@/lib/supabase-server'
 
 const isDemoMode = process.env.DEMO_MODE === 'true'
 
-/** Search Unsplash; if 0 results, broaden query to key noun, then try Google */
+/** Search Unsplash first; if 0 results, broaden query, then fall back to Pexels */
 async function searchWithFallback(query: string, unsplashKey: string) {
   // 1. Try exact query on Unsplash
   const unsplash = await searchUnsplashImages(query, unsplashKey)
@@ -20,15 +20,14 @@ async function searchWithFallback(query: string, unsplashKey: string) {
     if (broad.length > 0) return broad
   }
 
-  // 3. Try Google Images as final fallback
-  const googleKey      = process.env.GOOGLE_API_KEY ?? ''
-  const googleEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID ?? ''
-  if (googleKey && googleEngineId) {
+  // 3. Fall back to Pexels
+  const pexelsKey = process.env.PEXELS_API_KEY ?? ''
+  if (pexelsKey) {
     try {
-      const google = await searchGoogleImages(query, googleKey, googleEngineId)
-      if (google.length > 0) return google
+      const pexels = await searchPexelsImages(query, pexelsKey)
+      if (pexels.length > 0) return pexels
     } catch {
-      // Google not available — continue
+      // Pexels not available — continue
     }
   }
 
