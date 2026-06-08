@@ -828,7 +828,7 @@ export default function ImagesPage() {
                 {isLoading && <LoadingSkeleton />}
 
                 {/* Two-column image selectors */}
-                {!isLoading && state.imagesA.length > 0 && (
+                {!isLoading && (state.imagesA.length > 0 || state.imagesB.length > 0) && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
                     {([
                       {
@@ -906,7 +906,7 @@ export default function ImagesPage() {
                 )}
 
                 {/* Empty state — no search results */}
-                {!isLoading && state.imagesA.length === 0 && (
+                {!isLoading && state.imagesA.length === 0 && state.imagesB.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-3)' }}>
                     <p style={{ fontSize: 14, marginBottom: 14 }}>No images loaded yet</p>
                     <Button variant="ink" size="sm" onClick={() => searchForIdea(idea)}>
