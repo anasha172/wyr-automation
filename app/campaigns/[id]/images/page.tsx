@@ -336,6 +336,17 @@ function SwapGrid({
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/fallback/200/200' }}
             />
+            {/* Source badge */}
+            {img.source_page && img.source_page !== 'upload' && (
+              <div style={{
+                position: 'absolute', bottom: 4, left: 4,
+                background: 'rgba(0,0,0,0.55)', borderRadius: 4,
+                padding: '1px 5px', fontSize: 9, color: '#fff',
+                pointerEvents: 'none', lineHeight: '14px',
+              }}>
+                {img.source_page.includes('pexels') ? 'Pexels' : img.source_page.includes('unsplash') ? 'Unsplash' : 'Photo'}
+              </div>
+            )}
             {isSelected && (
               <>
                 <div style={{ position: 'absolute', inset: 0, background: accent, opacity: 0.25, pointerEvents: 'none' }} />

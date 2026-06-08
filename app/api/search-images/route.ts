@@ -6,18 +6,19 @@ import { createServiceClient } from '@/lib/supabase-server'
 
 const isDemoMode = process.env.DEMO_MODE === 'true'
 
-/** Search Unsplash first; if 0 results, broaden query, then fall back to Pexels */
+/** Search Unsplash first; if 0 results, broaden query, then fall back to Pexels.
+ *  Returns { results, source } so the DB row reflects the actual provider. */
 async function searchWithFallback(query: string, unsplashKey: string) {
   // 1. Try exact query on Unsplash
   const unsplash = await searchUnsplashImages(query, unsplashKey)
-  if (unsplash.length > 0) return unsplash
+  if (unsplash.length > 0) return { results: unsplash, source: 'unsplash' }
 
   // 2. Broaden to last meaningful word (e.g. "neon green car" → "car")
   const words = query.trim().split(/\s+/)
   const broadQuery = words[words.length - 1]
   if (broadQuery && broadQuery !== query) {
     const broad = await searchUnsplashImages(broadQuery, unsplashKey)
-    if (broad.length > 0) return broad
+    if (broad.length > 0) return { results: broad, source: 'unsplash' }
   }
 
   // 3. Fall back to Pexels
@@ -25,13 +26,13 @@ async function searchWithFallback(query: string, unsplashKey: string) {
   if (pexelsKey) {
     try {
       const pexels = await searchPexelsImages(query, pexelsKey)
-      if (pexels.length > 0) return pexels
+      if (pexels.length > 0) return { results: pexels, source: 'pexels' }
     } catch {
       // Pexels not available — continue
     }
   }
 
-  return []
+  return { results: [], source: 'unsplash' }
 }
 
 export async function POST(req: NextRequest) {
@@ -43,11 +44,13 @@ export async function POST(req: NextRequest) {
 
     const unsplashKey = process.env.UNSPLASH_ACCESS_KEY ?? ''
 
-    // Search images for both options in parallel — Google fallback if Unsplash returns nothing
-    const [resultsA, resultsB] = await Promise.all([
+    // Search images for both options in parallel — Pexels fallback if Unsplash returns nothing
+    const [a, b] = await Promise.all([
       searchWithFallback(queryA, unsplashKey),
       searchWithFallback(queryB, unsplashKey),
     ])
+    const { results: resultsA, source: sourceA } = a
+    const { results: resultsB, source: sourceB } = b
 
     // Save to DB in live mode
     if (!isDemoMode && campaignId && ideaId) {
@@ -59,7 +62,7 @@ export async function POST(req: NextRequest) {
           option: 'a',
           image_url: img.image_url,
           thumbnail_url: img.thumbnail_url,
-          source: 'unsplash',
+          source: sourceA,
           approval_status: 'pending',
           is_manager_pick: false,
         })),
@@ -69,7 +72,7 @@ export async function POST(req: NextRequest) {
           option: 'b',
           image_url: img.image_url,
           thumbnail_url: img.thumbnail_url,
-          source: 'unsplash',
+          source: sourceB,
           approval_status: 'pending',
           is_manager_pick: false,
         })),
