@@ -8,7 +8,7 @@ import { useUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import {
   Save, Mail, Search, Image, Camera,
-  MessageSquare, CheckCircle2, Hash,
+  CheckCircle2, Hash, Lock,
 } from 'lucide-react'
 
 interface Settings {
@@ -206,11 +206,16 @@ function Field({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const user     = useUser()
-  const isManager = user?.role === 'manager'
+  const user      = useUser()
+  const role      = user?.role ?? 'publisher'
+  const isAdmin   = role === 'admin'
+  const isManager = role === 'manager'
 
-  const [settings, setSettings] = useState<Settings>(DEFAULTS)
-  const [loading,  setLoading]  = useState(false)
+  const [settings,     setSettings]     = useState<Settings>(DEFAULTS)
+  const [loading,      setLoading]      = useState(false)
+  const [newPassword,  setNewPassword]  = useState('')
+  const [confirmPwd,   setConfirmPwd]   = useState('')
+  const [pwdLoading,   setPwdLoading]   = useState(false)
 
   useEffect(() => {
     if (isDemoMode) {
@@ -249,6 +254,29 @@ export default function SettingsPage() {
   function set(key: keyof Settings) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
       setSettings(s => ({ ...s, [key]: e.target.value }))
+  }
+
+  async function changePassword() {
+    if (!newPassword) return toast.error('Enter a new password.')
+    if (newPassword !== confirmPwd) return toast.error('Passwords do not match.')
+    if (newPassword.length < 8) return toast.error('Password must be at least 8 characters.')
+    setPwdLoading(true)
+    try {
+      if (isDemoMode) {
+        toast.success('Demo: Password updated!')
+      } else {
+        const supabase = createClient()
+        const { error } = await supabase.auth.updateUser({ password: newPassword })
+        if (error) throw error
+        toast.success('Password updated!')
+      }
+      setNewPassword('')
+      setConfirmPwd('')
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setPwdLoading(false)
+    }
   }
 
   const connected = (val: string) => (val ?? '').trim().length > 0
@@ -334,34 +362,43 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Notifications */}
+        {/* ── Password change — all roles ── */}
         <SettingsCard
-          icon={<Mail size={17} />}
-          title="Notifications"
-          description="Where approval requests are sent"
-          connected={connected(settings.manager_email)}
+          icon={<Lock size={17} />}
+          title="Password"
+          description="Change your login password"
+          connected={false}
         >
-          <Field
-            label="Manager email"
-            description="Approval requests go to this address"
-          >
+          <Field label="New password">
             <StyledInput
-              value={settings.manager_email}
-              onChange={set('manager_email')}
-              placeholder="manager@studio.co"
-              type="email"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              type="password"
             />
           </Field>
+          <Field label="Confirm new password">
+            <StyledInput
+              value={confirmPwd}
+              onChange={e => setConfirmPwd(e.target.value)}
+              placeholder="Repeat new password"
+              type="password"
+            />
+          </Field>
+          <Button variant="ink" onClick={changePassword} disabled={pwdLoading}>
+            <Save size={14} />
+            {pwdLoading ? 'Updating…' : 'Update password'}
+          </Button>
         </SettingsCard>
 
-        {/* Slack */}
-        <SettingsCard
-          icon={<Hash size={17} />}
-          title="Slack"
-          description="Interactive approval via Slack"
-          connected={isManager ? connected(settings.slack_user_id) : false}
-        >
-          {isManager ? (
+        {/* ── Slack User ID — manager + admin ── */}
+        {(isAdmin || isManager) && (
+          <SettingsCard
+            icon={<Hash size={17} />}
+            title="Slack"
+            description="Receive approval requests via Slack DM"
+            connected={connected(settings.slack_user_id)}
+          >
             <Field
               label="Your Slack User ID"
               description="Publishers will DM you approval requests. Find it: Slack → Profile → ⋮ → Copy member ID"
@@ -372,114 +409,82 @@ export default function SettingsPage() {
                 placeholder="U0123456789"
               />
             </Field>
-          ) : (
-            <div
-              style={{
-                fontSize:     13.5,
-                color:        'var(--ink-2)',
-                background:   'var(--paper-2)',
-                border:       '1px solid var(--hair)',
-                borderRadius: 9,
-                padding:      '10px 14px',
-                lineHeight:   1.6,
-              }}
+            <Button variant="ink" onClick={save} disabled={loading}>
+              <Save size={14} />
+              {loading ? 'Saving…' : 'Save'}
+            </Button>
+          </SettingsCard>
+        )}
+
+        {/* ── Admin-only settings ── */}
+        {isAdmin && (
+          <>
+            {/* Notifications */}
+            <SettingsCard
+              icon={<Mail size={17} />}
+              title="Notifications"
+              description="Where approval requests are sent"
+              connected={connected(settings.manager_email)}
             >
-              Slack Webhook URL and Bot Token are configured via{' '}
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 11, background: 'var(--hair)', padding: '1px 5px', borderRadius: 4 }}>
-                .env.local
-              </code>{' '}
-              —{' '}
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 11, background: 'var(--hair)', padding: '1px 5px', borderRadius: 4 }}>
-                SLACK_WEBHOOK_URL
-              </code>{' '}
-              and{' '}
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 11, background: 'var(--hair)', padding: '1px 5px', borderRadius: 4 }}>
-                SLACK_BOT_TOKEN
-              </code>
-              .
-            </div>
-          )}
-        </SettingsCard>
+              <Field label="Manager email" description="Approval requests go to this address">
+                <StyledInput
+                  value={settings.manager_email}
+                  onChange={set('manager_email')}
+                  placeholder="manager@studio.co"
+                  type="email"
+                />
+              </Field>
+            </SettingsCard>
 
-        {/* Google Image Search */}
-        <SettingsCard
-          icon={<Search size={17} />}
-          title="Google Image Search"
-          description="Powers image search for each option"
-          connected={connected(settings.google_api_key)}
-        >
-          <Field label="Google API key">
-            <StyledInput
-              value={settings.google_api_key}
-              onChange={set('google_api_key')}
-              placeholder="AIza…"
-              type="password"
-            />
-          </Field>
-          <Field label="Custom Search Engine ID">
-            <StyledInput
-              value={settings.google_search_engine_id}
-              onChange={set('google_search_engine_id')}
-              placeholder="e.g. 012345678901234567890"
-            />
-          </Field>
-        </SettingsCard>
+            {/* Google Image Search */}
+            <SettingsCard
+              icon={<Search size={17} />}
+              title="Google Image Search"
+              description="Powers image search for each option"
+              connected={connected(settings.google_api_key)}
+            >
+              <Field label="Google API key">
+                <StyledInput value={settings.google_api_key} onChange={set('google_api_key')} placeholder="AIza…" type="password" />
+              </Field>
+              <Field label="Custom Search Engine ID">
+                <StyledInput value={settings.google_search_engine_id} onChange={set('google_search_engine_id')} placeholder="e.g. 012345678901234567890" />
+              </Field>
+            </SettingsCard>
 
-        {/* Pinterest */}
-        <SettingsCard
-          icon={<Image size={17} />}
-          title="Pinterest"
-          description="Alternative image source"
-          connected={connected(settings.pinterest_api_token)}
-        >
-          <Field label="Pinterest API token">
-            <StyledInput
-              value={settings.pinterest_api_token}
-              onChange={set('pinterest_api_token')}
-              placeholder="Bearer token"
-              type="password"
-            />
-          </Field>
-        </SettingsCard>
+            {/* Pinterest */}
+            <SettingsCard
+              icon={<Image size={17} />}
+              title="Pinterest"
+              description="Alternative image source"
+              connected={connected(settings.pinterest_api_token)}
+            >
+              <Field label="Pinterest API token">
+                <StyledInput value={settings.pinterest_api_token} onChange={set('pinterest_api_token')} placeholder="Bearer token" type="password" />
+              </Field>
+            </SettingsCard>
 
-        {/* Instagram / Meta */}
-        <SettingsCard
-          icon={<Camera size={17} />}
-          title="Instagram / Meta"
-          description="Required to publish stories"
-          connected={connected(settings.instagram_user_id) && connected(settings.instagram_access_token)}
-        >
-          <Field label="Instagram User ID">
-            <StyledInput
-              value={settings.instagram_user_id}
-              onChange={set('instagram_user_id')}
-              placeholder="17841400000000000"
-            />
-          </Field>
-          <Field
-            label="Access token"
-            description="Business or Creator account linked to a Facebook Page"
-          >
-            <StyledInput
-              value={settings.instagram_access_token}
-              onChange={set('instagram_access_token')}
-              placeholder="EAAx…"
-              type="password"
-            />
-          </Field>
-        </SettingsCard>
+            {/* Instagram / Meta */}
+            <SettingsCard
+              icon={<Camera size={17} />}
+              title="Instagram / Meta"
+              description="Required to publish stories"
+              connected={connected(settings.instagram_user_id) && connected(settings.instagram_access_token)}
+            >
+              <Field label="Instagram User ID">
+                <StyledInput value={settings.instagram_user_id} onChange={set('instagram_user_id')} placeholder="17841400000000000" />
+              </Field>
+              <Field label="Access token" description="Business or Creator account linked to a Facebook Page">
+                <StyledInput value={settings.instagram_access_token} onChange={set('instagram_access_token')} placeholder="EAAx…" type="password" />
+              </Field>
+            </SettingsCard>
 
-        {/* Save */}
-        <Button
-          variant="ink"
-          size="lg"
-          onClick={save}
-          disabled={loading}
-          style={{ width: '100%', justifyContent: 'center' }}
-        >
-          <Save size={16} />
-          {loading ? 'Saving…' : 'Save all settings'}
-        </Button>
+            {/* Save all — admin only */}
+            <Button variant="ink" size="lg" onClick={save} disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
+              <Save size={16} />
+              {loading ? 'Saving…' : 'Save all settings'}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )
