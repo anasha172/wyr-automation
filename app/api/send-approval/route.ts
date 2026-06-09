@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       managerEmail,       // fallback email
       specificIdeaIds,    // idea-level send (ideas page)
       specificIdeaId,
+      storyIds,           // selected story idea IDs (stories send)
     } = await req.json()
 
     const supabase = createServiceClient()
@@ -164,37 +165,39 @@ export async function POST(req: NextRequest) {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // STORIES — all composed stories sent for approval
+    // STORIES — selected stories sent to a specific manager via DM
     // ════════════════════════════════════════════════════════════════
     if (type === 'stories') {
-      const { data: ideas } = await supabase
+      if (!managerId) throw new Error('A manager must be selected to send stories.')
+      if (!managerSlackId) throw new Error(`Manager has no Slack account linked. Ask them to connect Slack in Settings.`)
+
+      // Fetch only the selected stories
+      let query = supabase
         .from('wyr_ideas')
         .select('id, option_a, option_b, story_image_url')
         .eq('campaign_id', campaignId)
         .eq('approval_status', 'approved')
         .not('story_image_url', 'is', null)
 
-      // Mark stories as assigned to this manager and set status to pending
-      if (managerId && ideas?.length) {
-        const { error: assignErr } = await supabase
-          .from('wyr_ideas')
-          .update({ story_assigned_manager_id: managerId, story_approval_status: 'pending' })
-          .in('id', ideas.map((i: any) => i.id))
-        if (assignErr) throw new Error(`Failed to assign manager to stories: ${assignErr.message}`)
-      }
+      if (storyIds?.length) query = query.in('id', storyIds)
 
-      const { error: stageErr } = await supabase.from('campaigns').update({ stage: 'stories_pending' }).eq('id', campaignId)
-      if (stageErr) throw new Error(`Failed to update campaign stage: ${stageErr.message}`)
+      const { data: ideas } = await query
+      if (!ideas?.length) throw new Error('No composed stories found to send.')
 
-      if (ideas?.length) {
-        const blocks = await buildStoryBlocks(theme, ideas, campaignId)
-        const fallback = `Stories for "${theme}" need your approval`
+      // Mark stories as assigned to this manager and pending
+      const { error: assignErr } = await supabase
+        .from('wyr_ideas')
+        .update({ story_assigned_manager_id: managerId, story_approval_status: 'pending' })
+        .in('id', ideas.map((i: any) => i.id))
+      if (assignErr) throw new Error(`Failed to assign manager: ${assignErr.message}`)
 
-        let sent = false
-        if (managerSlackId) sent = await slackDM(managerSlackId, blocks, fallback)
-        if (!sent)          sent = await slackWebhook(blocks, fallback)
-        if (!sent && resolvedEmail) await sendApprovalEmail(resolvedEmail, theme, 'stories', approvalUrl)
-      }
+      await supabase.from('campaigns').update({ stage: 'stories_pending' }).eq('id', campaignId)
+
+      // Send Slack DM directly — no fallback
+      const blocks   = await buildStoryBlocks(theme, ideas, campaignId)
+      const fallback = `${ideas.length} stor${ideas.length > 1 ? 'ies' : 'y'} for "${theme}" need your approval`
+      const sent     = await slackDM(managerSlackId, blocks, fallback)
+      if (!sent) throw new Error('Failed to send Slack message. Check bot permissions.')
 
       return NextResponse.json({ success: true })
     }

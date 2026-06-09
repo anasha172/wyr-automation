@@ -121,6 +121,7 @@ export default function DesignPage() {
   const [composingAll,    setComposingAll]    = useState(false)
   const [sendingApproval, setSendingApproval] = useState(false)
   const [hasSentApproval, setHasSentApproval] = useState(false)
+  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set())
   const [approvingStory,  setApprovingStory]  = useState<string | null>(null)
   const [pickerOpen,      setPickerOpen]      = useState(false)
   const [managerMap,      setManagerMap]      = useState<Record<string, string>>({})
@@ -293,23 +294,23 @@ export default function DesignPage() {
 
   // ── Send for approval — opens manager picker ────────────────
   function sendForApproval() {
-    const missing = ideas.filter(i => !i.story_image_url)
-    if (missing.length > 0) return toast.error(`Compose all stories first (${missing.length} missing)`)
+    if (selectedIds.size === 0) return toast.error('Select at least one story to send.')
     if (isDemoMode) { doSendApproval(null); return }
     setPickerOpen(true)
   }
 
   async function doSendApproval(manager: ManagerInfo | null) {
     setPickerOpen(false)
+    if (!isDemoMode && !manager) return toast.error('Please select a manager.')
     setSendingApproval(true)
     try {
+      const storyIds = Array.from(selectedIds)
       if (isDemoMode) {
-        ideas.forEach(i => demoStore.ideas.update({ story_approval_status: 'approved' }, i.id))
-        demoStore.campaigns.update({ stage: 'stories_approved' }, id)
-        setIdeas(prev => prev.map(i => ({ ...i, story_approval_status: 'approved' as const })))
-        setCampaign((c: any) => c ? { ...c, stage: 'stories_approved' } : c)
+        storyIds.forEach(sid => demoStore.ideas.update({ story_approval_status: 'pending' }, sid))
+        setIdeas(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, story_approval_status: 'pending' as const } : i))
         setHasSentApproval(true)
-        toast.success('Demo: All stories auto-approved! ✅')
+        setSelectedIds(new Set())
+        toast.success('Demo: Stories sent for approval! ✅')
         return
       }
       const res  = await fetch('/api/send-approval', {
@@ -318,15 +319,18 @@ export default function DesignPage() {
         body:    JSON.stringify({
           campaignId:   id,
           type:         'stories',
-          managerId:    manager?.id ?? null,
-          managerEmail: manager?.email ?? '',
+          managerId:    manager!.id,
+          managerEmail: manager!.email,
+          storyIds,
         }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
+      setIdeas(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, story_approval_status: 'pending' as const } : i))
       setHasSentApproval(true)
+      setSelectedIds(new Set())
       setCampaign((c: any) => c ? { ...c, stage: 'stories_pending' } : c)
-      toast.success(`All stories sent to ${manager?.full_name ?? 'manager'} via Slack!`)
+      toast.success(`${storyIds.length} stor${storyIds.length > 1 ? 'ies' : 'y'} sent to ${manager!.full_name} via Slack!`)
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -496,19 +500,27 @@ export default function DesignPage() {
           </div>
 
           {/* Right CTA — conditional */}
-          <div style={{ flexShrink: 0 }}>
-            {/* Compose All — only when stories are not yet in review */}
-            {!allComposed && !hasSentApproval && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {/* Compose All */}
+            {!allComposed && (
               <Button variant="ink" onClick={composeAll} disabled={isBusy}>
                 <Wand2 size={15} />
                 {composingAll ? 'Composing…' : 'Compose All'}
               </Button>
             )}
-            {/* Send to Manager — only when all composed AND not yet sent AND publisher */}
-            {allComposed && !hasSentApproval && !isManager && (
-              <Button variant="a" onClick={sendForApproval} disabled={sendingApproval}>
+            {/* Send Selected to Manager — publisher only, at least 1 selected */}
+            {!isManager && (
+              <Button
+                variant="a"
+                onClick={sendForApproval}
+                disabled={sendingApproval || selectedIds.size === 0}
+              >
                 <Send size={15} />
-                {sendingApproval ? 'Sending…' : isDemoMode ? 'Auto-Approve (Demo)' : 'Send to Manager'}
+                {sendingApproval
+                  ? 'Sending…'
+                  : selectedIds.size > 0
+                    ? `Send Selected (${selectedIds.size})`
+                    : 'Send to Manager'}
               </Button>
             )}
           </div>
@@ -568,7 +580,7 @@ export default function DesignPage() {
                     transition:    'border-color .2s',
                   }}
                 >
-                  {/* ── Card header: eyebrow + status only ── */}
+                  {/* ── Card header: eyebrow + checkbox (publisher) + status ── */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span
                       style={{
@@ -583,7 +595,24 @@ export default function DesignPage() {
                       <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{String(i + 1).padStart(2, '0')}</span>
                       {' '}Story
                     </span>
-                    <StoryStatus status={status} managerName={managerMap[(idea as any).story_assigned_manager_id]} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* Checkbox — publisher only, composed stories not yet approved */}
+                      {!isManager && isComposed && status !== 'approved' && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(idea.id)}
+                          onChange={e => {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev)
+                              e.target.checked ? next.add(idea.id) : next.delete(idea.id)
+                              return next
+                            })
+                          }}
+                          style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--a)' }}
+                        />
+                      )}
+                      <StoryStatus status={status} managerName={managerMap[(idea as any).story_assigned_manager_id]} />
+                    </div>
                   </div>
 
                   {/* ── b) Row: 9:16 frame + options-only text col ── */}
