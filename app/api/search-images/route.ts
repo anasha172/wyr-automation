@@ -6,33 +6,40 @@ import { createServiceClient } from '@/lib/supabase-server'
 
 const isDemoMode = process.env.DEMO_MODE === 'true'
 
-/** Search Unsplash first; if 0 results, broaden query, then fall back to Pexels.
- *  Returns { results, source } so the DB row reflects the actual provider. */
+const TARGET = 9
+
+/** Search Unsplash first; if fewer than TARGET results, top up from Pexels.
+ *  Returns combined results with per-image source tracked via source_page URL. */
 async function searchWithFallback(query: string, unsplashKey: string) {
-  // 1. Try exact query on Unsplash
-  const unsplash = await searchUnsplashImages(query, unsplashKey)
-  if (unsplash.length > 0) return { results: unsplash, source: 'unsplash' }
+  // 1. Try Unsplash
+  let unsplash = await searchUnsplashImages(query, unsplashKey)
 
-  // 2. Broaden to last meaningful word (e.g. "neon green car" → "car")
-  const words = query.trim().split(/\s+/)
-  const broadQuery = words[words.length - 1]
-  if (broadQuery && broadQuery !== query) {
-    const broad = await searchUnsplashImages(broadQuery, unsplashKey)
-    if (broad.length > 0) return { results: broad, source: 'unsplash' }
-  }
-
-  // 3. Fall back to Pexels
-  const pexelsKey = process.env.PEXELS_API_KEY ?? ''
-  if (pexelsKey) {
-    try {
-      const pexels = await searchPexelsImages(query, pexelsKey)
-      if (pexels.length > 0) return { results: pexels, source: 'pexels' }
-    } catch {
-      // Pexels not available — continue
+  // 2. If Unsplash returned nothing, broaden to last meaningful word
+  if (unsplash.length === 0) {
+    const words = query.trim().split(/\s+/)
+    const broadQuery = words[words.length - 1]
+    if (broadQuery && broadQuery !== query) {
+      unsplash = await searchUnsplashImages(broadQuery, unsplashKey)
     }
   }
 
-  return { results: [], source: 'unsplash' }
+  const combined = [...unsplash]
+
+  // 3. If still under TARGET, top up with Pexels
+  const needed = TARGET - combined.length
+  if (needed > 0) {
+    const pexelsKey = process.env.PEXELS_API_KEY ?? ''
+    if (pexelsKey) {
+      try {
+        const pexels = await searchPexelsImages(query, pexelsKey, needed)
+        combined.push(...pexels)
+      } catch {
+        // Pexels not available — use what we have
+      }
+    }
+  }
+
+  return combined
 }
 
 export async function POST(req: NextRequest) {
@@ -44,38 +51,28 @@ export async function POST(req: NextRequest) {
 
     const unsplashKey = process.env.UNSPLASH_ACCESS_KEY ?? ''
 
-    // Search images for both options in parallel — Pexels fallback if Unsplash returns nothing
-    const [a, b] = await Promise.all([
+    // Search images for both options in parallel — Pexels tops up if Unsplash returns < 9
+    const [resultsA, resultsB] = await Promise.all([
       searchWithFallback(queryA, unsplashKey),
       searchWithFallback(queryB, unsplashKey),
     ])
-    const { results: resultsA, source: sourceA } = a
-    const { results: resultsB, source: sourceB } = b
 
-    // Save to DB in live mode
+    // Save to DB in live mode — derive source from image URL
     if (!isDemoMode && campaignId && ideaId) {
       const supabase = createServiceClient()
+      const toRow = (img: any, option: 'a' | 'b') => ({
+        campaign_id: campaignId,
+        idea_id: ideaId,
+        option,
+        image_url: img.image_url,
+        thumbnail_url: img.thumbnail_url,
+        source: img.source_page?.includes('pexels') ? 'pexels' : 'unsplash',
+        approval_status: 'pending',
+        is_manager_pick: false,
+      })
       const rows = [
-        ...resultsA.map((img) => ({
-          campaign_id: campaignId,
-          idea_id: ideaId,
-          option: 'a',
-          image_url: img.image_url,
-          thumbnail_url: img.thumbnail_url,
-          source: sourceA,
-          approval_status: 'pending',
-          is_manager_pick: false,
-        })),
-        ...resultsB.map((img) => ({
-          campaign_id: campaignId,
-          idea_id: ideaId,
-          option: 'b',
-          image_url: img.image_url,
-          thumbnail_url: img.thumbnail_url,
-          source: sourceB,
-          approval_status: 'pending',
-          is_manager_pick: false,
-        })),
+        ...resultsA.map((img) => toRow(img, 'a')),
+        ...resultsB.map((img) => toRow(img, 'b')),
       ]
       await supabase.from('wyr_images').insert(rows)
     }
