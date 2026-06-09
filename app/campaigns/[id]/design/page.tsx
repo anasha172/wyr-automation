@@ -732,25 +732,6 @@ export default function DesignPage() {
             <span style={{ fontWeight: 600, fontSize: 14, flex: 1, color: 'var(--ink)' }}>
               Waiting for manager to approve all stories…
             </span>
-            <a
-              href={`/campaigns/${id}/design`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display:    'inline-flex',
-                alignItems: 'center',
-                gap:        5,
-                fontSize:   13,
-                fontWeight: 500,
-                color:      'var(--ink-3)',
-                textDecoration: 'none',
-                transition: 'color .14s',
-              }}
-              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--ink)')}
-              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--ink-3)')}
-            >
-              <ExternalLink size={13} /> Approval link
-            </a>
             {isManager && (
               <Button variant="go" size="sm" onClick={approveAllStories} style={{ marginLeft: 'auto' }}>
                 <CheckCircle2 size={14} /> Approve All
