@@ -7,32 +7,22 @@ import { demoStore, isDemoMode } from '@/lib/demo-store'
 import { useUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import {
-  Save, Mail, Search, Image, Camera,
+  Save, Mail, Camera,
   CheckCircle2, Hash, Lock,
 } from 'lucide-react'
 
 interface Settings {
-  google_api_key: string
-  google_search_engine_id: string
-  pinterest_api_token: string
-  manager_email: string
-  canva_template_id: string
-  canva_access_token: string
-  instagram_user_id: string
+  manager_email:          string
+  instagram_user_id:      string
   instagram_access_token: string
-  slack_user_id: string
+  slack_user_id:          string
 }
 
 const DEFAULTS: Settings = {
-  google_api_key:          '',
-  google_search_engine_id: '',
-  pinterest_api_token:     '',
-  manager_email:           '',
-  canva_template_id:       '',
-  canva_access_token:      '',
-  instagram_user_id:       '',
-  instagram_access_token:  '',
-  slack_user_id:           '',
+  manager_email:          '',
+  instagram_user_id:      '',
+  instagram_access_token: '',
+  slack_user_id:          '',
 }
 
 // ─── FieldLabel ───────────────────────────────────────────────────────────────
@@ -433,33 +423,6 @@ export default function SettingsPage() {
                   placeholder="manager@studio.co"
                   type="email"
                 />
-              </Field>
-            </SettingsCard>
-
-            {/* Google Image Search */}
-            <SettingsCard
-              icon={<Search size={17} />}
-              title="Google Image Search"
-              description="Powers image search for each option"
-              connected={connected(settings.google_api_key)}
-            >
-              <Field label="Google API key">
-                <StyledInput value={settings.google_api_key} onChange={set('google_api_key')} placeholder="AIza…" type="password" />
-              </Field>
-              <Field label="Custom Search Engine ID">
-                <StyledInput value={settings.google_search_engine_id} onChange={set('google_search_engine_id')} placeholder="e.g. 012345678901234567890" />
-              </Field>
-            </SettingsCard>
-
-            {/* Pinterest */}
-            <SettingsCard
-              icon={<Image size={17} />}
-              title="Pinterest"
-              description="Alternative image source"
-              connected={connected(settings.pinterest_api_token)}
-            >
-              <Field label="Pinterest API token">
-                <StyledInput value={settings.pinterest_api_token} onChange={set('pinterest_api_token')} placeholder="Bearer token" type="password" />
               </Field>
             </SettingsCard>
 
