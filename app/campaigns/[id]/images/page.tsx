@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Check, RefreshCw, ChevronRight, Upload, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { demoStore, isDemoMode, type DemoIdea } from '@/lib/demo-store'
+import { useUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { FlowHeader } from '@/components/flow-header'
 import { VS } from '@/components/vs'
@@ -248,13 +249,14 @@ function SelectedPreview({
 
 /** 3×N swap grid of thumbnail images + upload tile */
 function SwapGrid({
-  images, selectedUrl, side, onPick, onUpload,
+  images, selectedUrl, side, onPick, onUpload, readOnly,
 }: {
   images:      ImageResult[]
   selectedUrl: string | undefined
   side:        'a' | 'b'
   onPick:      (img: ImageResult) => void
   onUpload:    (img: ImageResult) => void
+  readOnly?:   boolean
 }) {
   const accent   = side === 'a' ? 'var(--a)' : 'var(--b)'
   const inputRef = useRef<HTMLInputElement>(null)
@@ -311,21 +313,21 @@ function SwapGrid({
         return (
           <div
             key={img.image_url}
-            onClick={() => onPick(img)}
+            onClick={readOnly ? undefined : () => onPick(img)}
             style={{
               position:     'relative',
               aspectRatio:  '1',
               borderRadius: 8,
               overflow:     'hidden',
-              cursor:       'pointer',
+              cursor:       readOnly ? 'default' : 'pointer',
               border:       `2px solid ${isSelected ? accent : 'transparent'}`,
               transition:   'border-color .14s',
               flexShrink:   0,
             }}
-            onMouseEnter={e => {
+            onMouseEnter={readOnly ? undefined : e => {
               if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in oklab, ${accent} 45%, transparent)`
             }}
-            onMouseLeave={e => {
+            onMouseLeave={readOnly ? undefined : e => {
               if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = 'transparent'
             }}
           >
@@ -360,7 +362,7 @@ function SwapGrid({
       })}
 
       {/* ── Upload tile — .ph striped pattern from wyr.css ── */}
-      <div
+      {!readOnly && <div
         onClick={() => inputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -407,7 +409,7 @@ function SwapGrid({
           style={{ display: 'none' }}
           onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
         />
-      </div>
+      </div>}
 
       {/* Hint text below the full grid — spans all 3 columns */}
       <div
@@ -465,6 +467,7 @@ function LoadingSkeleton() {
 export default function ImagesPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
+  const user    = useUser()
 
   const [campaign,    setCampaign]    = useState<any>(null)
   const [ideas,       setIdeas]       = useState<DemoIdea[]>([])
@@ -659,6 +662,9 @@ export default function ImagesPage() {
   const state       = idea ? ideaStates[idea.id] : null
   const isLoading   = state?.loading ?? false
 
+  const LOCKED_STAGES = ['images_approved', 'stories_pending', 'stories_approved', 'design_ready', 'posted']
+  const isReadOnly    = (user?.role ?? 'publisher') === 'publisher' && LOCKED_STAGES.includes(campaign?.stage ?? '')
+
   // ── Render ──────────────────────────────────────────────────
   return (
     <div>
@@ -666,7 +672,7 @@ export default function ImagesPage() {
         <FlowHeader theme={campaign.theme} stage={campaign.stage} currentStep="images" tone={campaign.tone} audience={campaign.audience} />
       )}
 
-      <div style={{ padding: '28px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '34px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
 
         {/* ── No approved ideas ────────────────────────────────── */}
         {ideas.length === 0 && (
@@ -901,6 +907,7 @@ export default function ImagesPage() {
                           selectedUrl={col.selected?.image_url}
                           side={col.side}
                           onPick={col.pick}
+                          readOnly={isReadOnly}
                           onUpload={img => {
                             // Prepend the uploaded image to the list and auto-select it
                             const key = col.side === 'a' ? 'imagesA' : 'imagesB'

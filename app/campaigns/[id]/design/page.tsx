@@ -652,7 +652,10 @@ export default function DesignPage() {
 
                   {/* ── c) Full-width action footer — pinned to bottom ── */}
                   <div style={{ marginTop: 'auto' }}>
-                  {!isComposed ? (
+                  {!isComposed && !isManager && (status === 'pending' || status === 'approved') ? (
+                    // Publisher: story pending/approved but not yet composed — show nothing actionable
+                    null
+                  ) : !isComposed ? (
                     // Not composed → single Compose button
                     <Button
                       variant="ink"
