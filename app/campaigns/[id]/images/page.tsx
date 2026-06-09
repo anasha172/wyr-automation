@@ -672,7 +672,7 @@ export default function ImagesPage() {
         <FlowHeader theme={campaign.theme} stage={campaign.stage} currentStep="images" tone={campaign.tone} audience={campaign.audience} />
       )}
 
-      <div style={{ padding: '34px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '28px 40px 80px', maxWidth: 960 }}>
 
         {/* ── No approved ideas ────────────────────────────────── */}
         {ideas.length === 0 && (

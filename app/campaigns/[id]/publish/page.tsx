@@ -178,8 +178,7 @@ export default function PublishPage() {
         <div
           style={{
             maxWidth:  760,
-            margin:    '0 auto',
-            padding:   '48px 40px 80px',
+            padding:   '28px 40px 80px',
             textAlign: 'center',
           }}
         >
@@ -326,7 +325,7 @@ export default function PublishPage() {
         <FlowHeader theme={campaign.theme} stage={campaign.stage} currentStep="publish" tone={campaign.tone} audience={campaign.audience} />
       )}
 
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '34px 40px 80px' }}>
+      <div style={{ maxWidth: 760, padding: '28px 40px 80px' }}>
 
         {/* Demo notice */}
         {isDemoMode && (
