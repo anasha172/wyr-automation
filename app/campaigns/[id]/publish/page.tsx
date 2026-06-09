@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { demoStore, isDemoMode, type DemoIdea } from '@/lib/demo-store'
+import { useUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { FlowHeader } from '@/components/flow-header'
 import { StoryFrame } from '@/components/story-frame'
@@ -47,6 +48,9 @@ export default function PublishPage() {
   const { id }  = useParams<{ id: string }>()
   const router  = useRouter()
 
+  const user     = useUser()
+  const isManager = (user?.role ?? 'publisher') === 'manager'
+
   const [campaign,      setCampaign]      = useState<any>(null)
   const [ideas,         setIdeas]         = useState<IdeaForPublish[]>([])
   const [postMode,      setPostMode]      = useState<'now' | 'schedule'>('now')
@@ -54,6 +58,7 @@ export default function PublishPage() {
   const [loading,       setLoading]       = useState(false)
   const [success,       setSuccess]       = useState(false)
   const [postUrl,       setPostUrl]       = useState<string | null>(null)
+  const [postedAt,      setPostedAt]      = useState<string | null>(null)
 
   // ── Load — same logic, extended to also fetch manager-pick images ────
   const loadData = useCallback(async () => {
@@ -77,7 +82,7 @@ export default function PublishPage() {
         supabase.from('campaigns').select('*').eq('id', id).single(),
         supabase.from('wyr_ideas').select('*').eq('campaign_id', id).eq('approval_status', 'approved'),
         supabase.from('wyr_images').select('*').eq('campaign_id', id).eq('is_manager_pick', true),
-        supabase.from('posts').select('instagram_post_url').eq('campaign_id', id).single(),
+        supabase.from('posts').select('instagram_post_url, posted_at').eq('campaign_id', id).single(),
       ])
       setCampaign(camp)
       if (camp?.stage === 'posted') setSuccess(true)
@@ -88,6 +93,7 @@ export default function PublishPage() {
       }))
       setIdeas(enriched)
       if (postData?.instagram_post_url) setPostUrl(postData.instagram_post_url)
+      if (postData?.posted_at) setPostedAt(postData.posted_at)
     }
   }, [id])
 
@@ -120,14 +126,16 @@ export default function PublishPage() {
       if (isDemoMode) {
         await new Promise(r => setTimeout(r, 1500))
         const fakePostUrl = `https://www.instagram.com/p/demo_${id.slice(0, 8)}/`
+        const now = new Date().toISOString()
         demoStore.posts.upsert({
           campaign_id:          id,
           instagram_post_url:   fakePostUrl,
           instagram_media_id:   `demo_carousel_${id.slice(0, 8)}`,
-          posted_at:            new Date().toISOString(),
+          posted_at:            now,
         })
         demoStore.campaigns.update({ stage: 'posted' }, id)
         setPostUrl(fakePostUrl)
+        setPostedAt(now)
         setSuccess(true)
         toast.success('Demo: Posted as carousel! 🎉')
         return
@@ -604,127 +612,147 @@ export default function PublishPage() {
           ))}
         </div>
 
-        {/* ── When to post + CTA card ────────────────────────── */}
-        <div
-          style={{
-            background:    'var(--card)',
-            border:        '1px solid var(--hair)',
-            borderRadius:  14,
-            boxShadow:     'var(--shadow-sm)',
-            padding:       '18px 20px',
-          }}
-        >
-          {/* Field label */}
-          <span
-            style={{
-              display:       'block',
-              fontFamily:    'var(--mono)',
-              fontSize:      10,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color:         'var(--ink-3)',
-              marginBottom:  10,
-            }}
-          >
-            When to post
-          </span>
-
-          {/* Mode chips — locked while stories are awaiting manager approval */}
+        {/* ── When to post (publisher only) / Post status (manager) ── */}
+        {isManager ? (
+          /* ── Manager view: show publish status, no post controls ── */
           <div
             style={{
-              display:      'flex',
-              gap:          8,
-              marginBottom: postMode === 'schedule' ? 12 : 0,
+              background:    'var(--card)',
+              border:        '1px solid var(--hair)',
+              borderRadius:  14,
+              boxShadow:     'var(--shadow-sm)',
+              padding:       '20px',
+              display:       'flex',
+              alignItems:    'center',
+              gap:           12,
             }}
           >
-            {(['now', 'schedule'] as const).map(m => {
-              const active   = postMode === m
-              const disabled = hasPending
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={disabled ? undefined : () => setPostMode(m)}
-                  style={{
-                    flex:          1,
-                    padding:       '11px',
-                    textAlign:     'center',
-                    fontFamily:    'var(--sans)',
-                    fontSize:      14,
-                    fontWeight:    active ? 600 : 500,
-                    color:         disabled ? 'var(--ink-3)' : active ? 'var(--ink)' : 'var(--ink-3)',
-                    background:    disabled ? 'var(--paper-2)' : active ? 'var(--card)' : 'var(--paper-2)',
-                    border:        `1.5px solid ${disabled ? 'var(--hair)' : active ? 'var(--ink)' : 'var(--hair-2)'}`,
-                    borderRadius:  10,
-                    cursor:        disabled ? 'not-allowed' : 'pointer',
-                    boxShadow:     (!disabled && active) ? 'var(--shadow-sm)' : 'none',
-                    opacity:       disabled ? 0.5 : 1,
-                    transition:    'all .14s',
-                  }}
-                >
-                  {m === 'now' ? 'Post now' : 'Schedule'}
-                </button>
-              )
-            })}
+            {postedAt ? (
+              <>
+                <CheckCircle2 size={20} style={{ color: 'var(--go-ink)', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Published</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>
+                    {new Date(postedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </div>
+                </div>
+                {postUrl && (
+                  <a
+                    href={postUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--b-ink)', fontWeight: 600, textDecoration: 'none' }}
+                  >
+                    <ExternalLink size={13} /> View on Instagram
+                  </a>
+                )}
+              </>
+            ) : (
+              <>
+                <span
+                  className="live"
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--pending)', flexShrink: 0, display: 'inline-block' }}
+                />
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+                  Not published yet
+                  <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--ink-3)', marginLeft: 8 }}>
+                    — waiting for publisher to post
+                  </span>
+                </div>
+              </>
+            )}
           </div>
-
-          {/* Schedule datetime input */}
-          {postMode === 'schedule' && (
-            <input
-              type="datetime-local"
-              value={scheduleTime}
-              onChange={e => setScheduleTime(e.target.value)}
-              style={{
-                width:        '100%',
-                boxSizing:    'border-box',
-                border:       '1.5px solid var(--hair-2)',
-                borderRadius: 10,
-                padding:      '10px 14px',
-                fontSize:     14,
-                fontFamily:   'var(--sans)',
-                color:        'var(--ink)',
-                background:   'var(--paper)',
-                outline:      'none',
-                marginBottom: 0,
-              }}
-              onFocus={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--ink)')}
-              onBlur={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--hair-2)')}
-            />
-          )}
-
-          {/* Flame "Post as Carousel" CTA */}
-          <Button
-            variant="a"
-            size="lg"
-            onClick={handlePost}
-            disabled={loading || hasPending || composedIdeas.length === 0}
-            style={{ width: '100%', justifyContent: 'center', marginTop: 16 }}
+        ) : (
+          /* ── Publisher view: when to post + CTA ── */
+          <div
+            style={{
+              background:    'var(--card)',
+              border:        '1px solid var(--hair)',
+              borderRadius:  14,
+              boxShadow:     'var(--shadow-sm)',
+              padding:       '18px 20px',
+            }}
           >
-            <Share2 size={16} />
-            {loading
-              ? 'Posting…'
-              : isDemoMode
-                ? `Simulate Carousel Post (Demo)`
-                : `Post ${composedIdeas.length} Stories as Carousel`}
-          </Button>
-
-          {/* Locked hint — shown whenever stories are still pending */}
-          {hasPending && (
-            <p
+            <span
               style={{
+                display:       'block',
                 fontFamily:    'var(--mono)',
-                fontSize:      11,
-                textAlign:     'center',
-                color:         'var(--ink-3)',
-                marginTop:     10,
+                fontSize:      10,
+                letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                letterSpacing: '0.06em',
+                color:         'var(--ink-3)',
+                marginBottom:  10,
               }}
             >
-              Manager must approve all stories first
-            </p>
-          )}
-        </div>
+              When to post
+            </span>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: postMode === 'schedule' ? 12 : 0 }}>
+              {(['now', 'schedule'] as const).map(m => {
+                const active   = postMode === m
+                const disabled = hasPending
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={disabled ? undefined : () => setPostMode(m)}
+                    style={{
+                      flex:          1,
+                      padding:       '11px',
+                      textAlign:     'center',
+                      fontFamily:    'var(--sans)',
+                      fontSize:      14,
+                      fontWeight:    active ? 600 : 500,
+                      color:         disabled ? 'var(--ink-3)' : active ? 'var(--ink)' : 'var(--ink-3)',
+                      background:    disabled ? 'var(--paper-2)' : active ? 'var(--card)' : 'var(--paper-2)',
+                      border:        `1.5px solid ${disabled ? 'var(--hair)' : active ? 'var(--ink)' : 'var(--hair-2)'}`,
+                      borderRadius:  10,
+                      cursor:        disabled ? 'not-allowed' : 'pointer',
+                      boxShadow:     (!disabled && active) ? 'var(--shadow-sm)' : 'none',
+                      opacity:       disabled ? 0.5 : 1,
+                      transition:    'all .14s',
+                    }}
+                  >
+                    {m === 'now' ? 'Post now' : 'Schedule'}
+                  </button>
+                )
+              })}
+            </div>
+
+            {postMode === 'schedule' && (
+              <input
+                type="datetime-local"
+                value={scheduleTime}
+                onChange={e => setScheduleTime(e.target.value)}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  border: '1.5px solid var(--hair-2)', borderRadius: 10,
+                  padding: '10px 14px', fontSize: 14, fontFamily: 'var(--sans)',
+                  color: 'var(--ink)', background: 'var(--paper)', outline: 'none', marginBottom: 0,
+                }}
+                onFocus={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--ink)')}
+                onBlur={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--hair-2)')}
+              />
+            )}
+
+            <Button
+              variant="a"
+              size="lg"
+              onClick={handlePost}
+              disabled={loading || hasPending || composedIdeas.length === 0}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 16 }}
+            >
+              <Share2 size={16} />
+              {loading ? 'Posting…' : isDemoMode ? 'Simulate Carousel Post (Demo)' : `Post ${composedIdeas.length} Stories as Carousel`}
+            </Button>
+
+            {hasPending && (
+              <p style={{ fontFamily: 'var(--mono)', fontSize: 11, textAlign: 'center', color: 'var(--ink-3)', marginTop: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Manager must approve all stories first
+              </p>
+            )}
+          </div>
+        )}
 
       </div>
     </div>
