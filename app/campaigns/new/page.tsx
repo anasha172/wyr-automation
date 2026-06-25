@@ -7,7 +7,7 @@ import { Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { demoStore, isDemoMode } from '@/lib/demo-store'
 import { Button } from '@/components/ui/button'
-import { InstagramIcon, LinkedInIcon } from '@/components/icons'
+import { InstagramIcon } from '@/components/icons'
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -170,7 +170,7 @@ export default function NewCampaignPage() {
         </h1>
 
         <p style={{ color: 'var(--ink-2)', fontSize: 15.5, marginTop: 12 }}>
-          Give us a theme. We'll draft five "Would You Rather" questions for it.
+          Give us a theme. We'll draft five story ideas for it.
         </p>
       </div>
 
@@ -241,71 +241,6 @@ export default function NewCampaignPage() {
               />
             </div>
 
-            {/* LinkedIn — disabled/soon */}
-            <div
-              style={{
-                padding:      16,
-                display:      'flex',
-                gap:          12,
-                alignItems:   'center',
-                background:   'var(--paper-2)',
-                border:       '1px solid var(--hair)',
-                borderRadius: 14,
-                opacity:      0.55,
-                cursor:       'not-allowed',
-                userSelect:   'none',
-              }}
-            >
-              {/* Icon box */}
-              <div
-                style={{
-                  width:          40,
-                  height:         40,
-                  borderRadius:   10,
-                  background:     'var(--hair-2)',
-                  color:          'var(--ink-3)',
-                  display:        'flex',
-                  alignItems:     'center',
-                  justifyContent: 'center',
-                  flexShrink:     0,
-                }}
-              >
-                <LinkedInIcon size={18} />
-              </div>
-
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--ink)' }}>LinkedIn</div>
-                <div
-                  style={{
-                    fontFamily:    'var(--mono)',
-                    fontSize:      11,
-                    color:         'var(--ink-3)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    marginTop:     2,
-                  }}
-                >
-                  Carousel
-                </div>
-              </div>
-
-              {/* "Soon" pill */}
-              <span
-                style={{
-                  fontFamily:    'var(--mono)',
-                  fontSize:      9,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color:         'var(--ink-3)',
-                  border:        '1px solid var(--hair-2)',
-                  borderRadius:  5,
-                  padding:       '2px 7px',
-                  flexShrink:    0,
-                }}
-              >
-                Soon
-              </span>
-            </div>
           </div>
         </div>
 

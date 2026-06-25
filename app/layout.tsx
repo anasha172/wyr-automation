@@ -24,8 +24,8 @@ const mono = Space_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'WYR Studio — Editorial Duel',
-  description: 'Automate Would You Rather social media campaigns end-to-end',
+  title: 'PostDeck — Social Media Studio',
+  description: 'Create and publish Instagram and LinkedIn carousels, end-to-end.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

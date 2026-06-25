@@ -242,8 +242,8 @@ export default function PublishPage() {
             }}
           >
             {isDemoMode
-              ? 'In production this would post a carousel of all approved WYR stories to Instagram.'
-              : `Your ${composedIdeas.length} "Would You Rather" stories are live as an Instagram carousel.`}
+              ? 'In production this would post a carousel of all approved stories to Instagram.'
+              : `Your ${composedIdeas.length} stories are live as an Instagram carousel.`}
           </p>
 
           {/* View on Instagram link */}

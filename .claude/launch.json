@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "WYR Kit",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "design_handoff_wyr_redesign/reference", "-p", "3001", "--no-clipboard"],
+      "port": 3001
     }
   ]
 }

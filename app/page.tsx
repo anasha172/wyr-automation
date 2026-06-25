@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingUp, Clock, CheckCircle2, Search, Plus, ChevronRight, Sparkles } from 'lucide-react'
+import { TrendingUp, Clock, CheckCircle2, Search, Plus, ChevronRight, Sparkles, Briefcase, Send, CalendarDays } from 'lucide-react'
 import { InstagramIcon } from '@/components/icons'
+import { LinkedInIcon } from '@/components/linkedin/linkedin-icon'
 import { createClient } from '@/lib/supabase'
 import { demoStore, isDemoMode } from '@/lib/demo-store'
 import { useUser } from '@/lib/auth'
@@ -24,7 +25,8 @@ interface Campaign {
   audience: string
 }
 
-type FilterTab = 'all' | 'approval' | 'in_progress' | 'posted'
+type FilterTab   = 'all' | 'approval' | 'in_progress' | 'posted'
+type ChannelTab  = 'all' | 'instagram' | 'linkedin'
 
 const STAGE_NEXT: Record<string, string> = {
   ideas_pending:   'ideas',   ideas_approved:   'images',
@@ -75,17 +77,42 @@ function MiniPipe({ stage }: { stage: string }) {
   )
 }
 
+// ─── Section label (INSTAGRAM / LINKEDIN eyebrow) ────────────────────────────
+
+function SectionLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display:       'flex',
+        alignItems:    'center',
+        gap:           8,
+        fontFamily:    'var(--mono)',
+        fontSize:      10,
+        letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+        color:         'var(--ink-3)',
+        marginBottom:  10,
+      }}
+    >
+      <span style={{ display: 'flex', color: 'var(--ink-3)' }}>{icon}</span>
+      {children}
+      <span style={{ flex: 1, height: 1, background: 'var(--hair)' }} />
+    </div>
+  )
+}
+
 // ─── Figure (stat card) ───────────────────────────────────────────────────────
 
 function Figure({
-  label, value, trend, up, icon, last = false,
+  label, value, display, trend, up, icon, last = false,
 }: {
-  label: string
-  value: number
-  trend: string
-  up: boolean
-  icon: React.ReactNode
-  last?: boolean
+  label:    string
+  value:    number
+  display?: string   // optional override for the big number (e.g. "—")
+  trend:    string
+  up:       boolean
+  icon:     React.ReactNode
+  last?:    boolean
 }) {
   return (
     <div style={{ padding: '20px 22px', borderRight: last ? 'none' : '1px solid var(--hair)' }}>
@@ -116,7 +143,7 @@ function Figure({
           color:         'var(--ink)',
         }}
       >
-        {value}
+        {display ?? value}
       </div>
 
       {/* Trend line */}
@@ -142,11 +169,14 @@ export default function DashboardPage() {
   const router = useRouter()
   const user   = useUser()
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [filter,    setFilter]    = useState<FilterTab>('all')
-  const [search,    setSearch]    = useState('')
-  const [page,      setPage]      = useState(1)
+  const [campaigns,         setCampaigns]         = useState<Campaign[]>([])
+  const [loading,           setLoading]           = useState(true)
+  const [filter,            setFilter]            = useState<FilterTab>('all')
+  const [channel,           setChannel]           = useState<ChannelTab>('all')
+  const [search,            setSearch]            = useState('')
+  const [page,              setPage]              = useState(1)
+  const [linkedinJobsReady, setLinkedinJobsReady] = useState<number | null>(null)
+  const [linkedinPosts,     setLinkedinPosts]     = useState<any[]>([])
 
   const PAGE_SIZE = 10
 
@@ -165,26 +195,11 @@ export default function DashboardPage() {
 
     async function load() {
       if (isMgr) {
-        // Managers only see campaigns they've been assigned to (ideas or stories)
-        const { data: ideaRows } = await supabase
-          .from('wyr_ideas')
-          .select('campaign_id')
-          .or(`assigned_manager_id.eq.${user!.id},story_assigned_manager_id.eq.${user!.id}`)
-
-        const campaignIds = [
-          ...new Set((ideaRows ?? []).map((r: any) => r.campaign_id as string))
-        ]
-
-        if (campaignIds.length === 0) {
-          setCampaigns([])
-          setLoading(false)
-          return
-        }
-
+        // RLS policy (schema_patch_v5) automatically scopes campaigns to
+        // publishers whose manager_id = auth.uid() — no manual filter needed.
         const { data } = await supabase
           .from('campaigns')
           .select('*')
-          .in('id', campaignIds)
           .order('created_at', { ascending: false })
 
         setCampaigns(data ?? [])
@@ -228,6 +243,19 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel) }
   }, [user])
 
+  // ── LinkedIn jobs count + post history ──────────────────────
+  useEffect(() => {
+    fetch('/api/linkedin/fetch-jobs')
+      .then(r => r.json())
+      .then(d => setLinkedinJobsReady(d.jobs?.length ?? 0))
+      .catch(() => setLinkedinJobsReady(0))
+
+    fetch('/api/linkedin/posts')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setLinkedinPosts(Array.isArray(d) ? d : []))
+      .catch(() => setLinkedinPosts([]))
+  }, [])
+
   // ── Stats ────────────────────────────────────────────────────
   const startOfWeek = Date.now() - 7 * 24 * 60 * 60 * 1000
 
@@ -247,7 +275,9 @@ export default function DashboardPage() {
       filter === 'approval'    ? ['ideas_pending','images_pending','stories_pending'].includes(c.stage) :
       filter === 'in_progress' ? ['ideas_approved','images_approved','stories_approved','design_ready'].includes(c.stage) :
       filter === 'posted'      ? c.stage === 'posted' : true
-    return matchesFilter && (!search || c.theme.toLowerCase().includes(search.toLowerCase()))
+    // channel filter: instagram = all campaigns; linkedin tab has its own data source
+    const matchesChannel = channel === 'linkedin' ? false : true
+    return matchesFilter && matchesChannel && (!search || c.theme.toLowerCase().includes(search.toLowerCase()))
   })
 
   // ── Pagination ───────────────────────────────────────────────
@@ -257,8 +287,8 @@ export default function DashboardPage() {
 
   function goTo(p: number) { setPage(Math.max(1, Math.min(p, totalPages))) }
 
-  // Reset to page 1 when filter or search changes
-  useEffect(() => { setPage(1) }, [filter, search])
+  // Reset to page 1 when filter, channel or search changes
+  useEffect(() => { setPage(1) }, [filter, channel, search])
 
   const TABS: { key: FilterTab; label: string; count: number }[] = [
     { key: 'approval',    label: 'Awaiting Approval', count: pendingApprovals },
@@ -271,7 +301,7 @@ export default function DashboardPage() {
 
   // ── Render (publisher / manager) ────────────────────────────
   return (
-    <div style={{ padding: '34px 40px 80px', maxWidth: 1320, margin: '0 auto' }}>
+    <div style={{ padding: '28px 40px 80px' }}>
 
       {/* ── Masthead ──────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
@@ -308,7 +338,7 @@ export default function DashboardPage() {
           </h1>
 
           <p style={{ color: 'var(--ink-2)', fontSize: 15.5, marginTop: 12, maxWidth: '56ch', margin: '12px 0 0' }}>
-            Every campaign, from first idea to posted Story.
+            Instagram campaigns and LinkedIn posts, all in one place.
           </p>
         </div>
 
@@ -359,14 +389,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          {user?.role !== 'manager' && (
-            <Link href="/campaigns/new">
-              <Button variant="a">
-                <Plus size={15} />
-                New Campaign
-              </Button>
-            </Link>
-          )}
         </div>
       </div>
 
@@ -387,7 +409,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Figure row (3-up stats) ───────────────────────────── */}
+      {/* ── Instagram stats ───────────────────────────────────── */}
+      <SectionLabel icon={<InstagramIcon size={12} />}>Instagram</SectionLabel>
       <div
         style={{
           display:             'grid',
@@ -427,6 +450,44 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* ── LinkedIn stats ────────────────────────────────────── */}
+      <SectionLabel icon={<LinkedInIcon size={12} />}>LinkedIn</SectionLabel>
+      <div
+        style={{
+          display:             'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          border:              '1px solid var(--hair)',
+          borderRadius:        14,
+          overflow:            'hidden',
+          background:          'var(--card)',
+          marginBottom:        26,
+        }}
+      >
+        <Figure
+          label="Jobs Ready to Post"
+          value={linkedinJobsReady ?? 0}
+          trend={linkedinJobsReady ? 'Not posted yet' : 'No jobs pending'}
+          up={!!linkedinJobsReady}
+          icon={<Briefcase size={16} />}
+        />
+        <Figure
+          label="Carousels Posted"
+          value={linkedinPosts.length}
+          trend={linkedinPosts.length > 0 ? `${linkedinPosts.reduce((s, p) => s + (p.jobs?.length ?? 0), 0)} jobs total` : 'No posts yet'}
+          up={linkedinPosts.length > 0}
+          icon={<Send size={16} />}
+        />
+        <Figure
+          label="Last Post"
+          value={0}
+          display={linkedinPosts[0] ? new Date(linkedinPosts[0].posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+          trend={linkedinPosts[0] ? `${linkedinPosts[0].jobs?.length ?? 0} jobs · ${linkedinPosts[0].target}` : 'Never posted'}
+          up={!!linkedinPosts[0]}
+          icon={<CalendarDays size={16} />}
+          last
+        />
+      </div>
+
       {/* ── Campaigns card ────────────────────────────────────── */}
       <div
         style={{
@@ -441,13 +502,60 @@ export default function DashboardPage() {
         {/* Tab bar */}
         <div
           style={{
-            display:        'flex',
-            justifyContent: 'space-between',
-            alignItems:     'center',
-            padding:        '14px 18px',
-            borderBottom:   '1px solid var(--hair)',
+            display:      'flex',
+            flexDirection:'column',
+            borderBottom: '1px solid var(--hair)',
           }}
         >
+          {/* Channel tabs row */}
+          <div
+            style={{
+              display:      'flex',
+              alignItems:   'center',
+              gap:          2,
+              padding:      '10px 18px 0',
+              borderBottom: '1px solid var(--hair)',
+            }}
+          >
+            {([
+              { key: 'all',       label: 'All' },
+              { key: 'instagram', label: 'Instagram', icon: <InstagramIcon size={12} /> },
+              { key: 'linkedin',  label: 'LinkedIn',  icon: <LinkedInIcon size={12} /> },
+            ] as { key: ChannelTab; label: string; icon?: React.ReactNode }[]).map(t => {
+              const active = channel === t.key
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setChannel(t.key)}
+                  style={{
+                    fontFamily:    'var(--mono)',
+                    fontSize:      11,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color:         active ? 'var(--ink)' : 'var(--ink-3)',
+                    padding:       '8px 14px 10px',
+                    borderRadius:  0,
+                    cursor:        'pointer',
+                    border:        'none',
+                    borderBottom:  active ? '2px solid var(--ink)' : '2px solid transparent',
+                    background:    'transparent',
+                    display:       'flex',
+                    alignItems:    'center',
+                    gap:           6,
+                    transition:    'all .14s',
+                    lineHeight:    1,
+                    marginBottom:  -1,
+                  }}
+                >
+                  {t.icon && <span style={{ display: 'flex' }}>{t.icon}</span>}
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Stage filter + pagination row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px' }}>
           {/* Filter tabs */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             {TABS.map(t => {
@@ -553,10 +661,112 @@ export default function DashboardPage() {
             </div>
           )}
           </div>
+          </div> {/* end stage filter + pagination row */}
         </div>
 
         {/* Table / empty / loading */}
-        {loading ? (
+        {channel === 'linkedin' ? (
+          linkedinPosts.length === 0 ? (
+            <div style={{ padding: '64px 0', textAlign: 'center' }}>
+              <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'center', color: 'var(--ink-3)' }}>
+                <LinkedInIcon size={26} />
+              </div>
+              <p style={{ fontWeight: 500, color: 'var(--ink-2)', marginBottom: 6 }}>No LinkedIn posts yet</p>
+              <p style={{ color: 'var(--ink-3)', fontSize: 13.5, marginBottom: 18 }}>
+                Posts you publish via LinkedIn · New Post will appear here.
+              </p>
+              <Link href="/linkedin/new">
+                <Button variant="ink" size="sm">
+                  <Plus size={13} /> New LinkedIn Post
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Companies', 'Jobs', 'Slides', 'Target', 'Posted', ''].map((h, i) => (
+                    <th
+                      key={i}
+                      style={{
+                        textAlign:     i === 5 ? 'right' : 'left',
+                        fontFamily:    'var(--mono)',
+                        fontSize:      10,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color:         'var(--ink-3)',
+                        fontWeight:    400,
+                        padding:       '12px 16px',
+                        borderBottom:  '1px solid var(--hair)',
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {linkedinPosts.map((p, i) => {
+                  const companies: string = (p.jobs as any[])
+                    .map((j: any) => j.company).filter(Boolean)
+                    .filter((c: string, idx: number, arr: string[]) => arr.indexOf(c) === idx)
+                    .join(', ')
+                  const isLast = i === linkedinPosts.length - 1
+                  return (
+                    <tr
+                      key={p.id}
+                      style={{ borderBottom: isLast ? 'none' : '1px solid var(--hair)', transition: 'background .12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--paper-2)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td style={{ padding: '13px 16px', fontWeight: 500, fontSize: 14, color: 'var(--ink)', maxWidth: 280 }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {companies || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--ink-2)' }}>
+                          {(p.jobs as any[]).length}
+                        </span>
+                      </td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--ink-2)' }}>
+                          {p.slide_count}
+                        </span>
+                      </td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <span style={{
+                          fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.08em',
+                          textTransform: 'uppercase', padding: '3px 8px', borderRadius: 5,
+                          background: 'var(--paper-2)', border: '1px solid var(--hair-2)', color: 'var(--ink-3)',
+                        }}>
+                          {p.target}
+                        </span>
+                      </td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ink-3)' }}>
+                          {new Date(p.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </td>
+                      <td style={{ padding: '13px 16px', textAlign: 'right' }}>
+                        {p.post_url && (
+                          <a
+                            href={p.post_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--b-ink)', textDecoration: 'none' }}
+                          >
+                            <LinkedInIcon size={11} /> View
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )
+        ) : loading ? (
           <div style={{ padding: '24px 20px' }}>
             {[1, 0.65, 0.4].map((op, i) => (
               <div
@@ -749,3 +959,4 @@ export default function DashboardPage() {
     </div>
   )
 }
+

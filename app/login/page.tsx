@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Avatar } from '@/components/avatar'
-import { StoryFrame } from '@/components/story-frame'
 import { Button } from '@/components/ui/button'
 import { Loader2, ArrowRight } from 'lucide-react'
 
@@ -33,16 +32,6 @@ const DEMO_ACCOUNTS_BASE = [
     desc:     'Users, settings, all access',
   },
 ]
-
-// Sample idea for the decorative StoryFrame on the ink panel.
-// picsum seeds are stable — same seed → same photo every time.
-// Plain <img> is used inside StoryFrame so no next/image remotePatterns needed.
-const SAMPLE = {
-  optionA: 'Read minds for a day',
-  optionB: 'Be invisible for a day',
-  imageA:  'https://picsum.photos/seed/wyrA/360/640',
-  imageB:  'https://picsum.photos/seed/wyrB/360/640',
-}
 
 // ─── StyledInput ──────────────────────────────────────────────────────────────
 
@@ -80,6 +69,10 @@ function StyledInput({
     />
   )
 }
+
+// ─── PostDeckMark — wordmark: Post (paper) · Deck (cobalt) ──────────────────────
+
+const COBALT_BRIGHT = 'oklch(0.68 0.17 264)'   // lifted cobalt, legible on --ink
 
 // ─── LoginForm ────────────────────────────────────────────────────────────────
 
@@ -142,33 +135,49 @@ function LoginForm() {
       }}
     >
 
-      {/* ── Left: editorial ink panel ───────────────────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════════════
+          Left: editorial ink panel — PostDeck
+          ════════════════════════════════════════════════════════════════════ */}
       <div
         style={{
-          background:     'var(--ink)',
-          color:          'var(--paper)',
-          padding:        '52px 60px',
-          display:        'flex',
-          flexDirection:  'column',
-          position:       'relative',
-          overflow:       'hidden',
+          background:    'var(--ink)',
+          color:         'var(--paper)',
+          padding:       '52px 60px',
+          display:       'flex',
+          flexDirection: 'column',
+          position:      'relative',
+          overflow:      'hidden',
         }}
       >
+        {/* faint cobalt glow behind the deck */}
+        <div
+          aria-hidden
+          style={{
+            position:      'absolute',
+            right:         -120,
+            bottom:        -160,
+            width:         560,
+            height:        560,
+            borderRadius:  '50%',
+            background:    'radial-gradient(circle, color-mix(in oklab, var(--b) 38%, transparent), transparent 68%)',
+            pointerEvents: 'none',
+            zIndex:        0,
+          }}
+        />
 
-        {/* Wordmark */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        {/* Wordmark — Post (paper) · Deck (cobalt) */}
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'baseline', gap: 15 }}>
           <span
             style={{
               fontFamily:    'var(--serif)',
               fontSize:      40,
               fontWeight:    700,
-              letterSpacing: '-0.03em',
+              letterSpacing: '-0.035em',
               lineHeight:    1,
             }}
           >
-            <span style={{ color: 'var(--a)' }}>W</span>
-            <span style={{ color: 'oklch(0.7 0.16 262)' }}>Y</span>
-            <span style={{ color: 'var(--paper)' }}>R</span>
+            <span style={{ color: 'var(--paper)' }}>Post</span>
+            <span style={{ color: COBALT_BRIGHT }}>Deck</span>
           </span>
           <span
             style={{
@@ -177,14 +186,15 @@ function LoginForm() {
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
               color:         'rgba(251,250,247,0.5)',
+              paddingBottom: 2,
             }}
           >
             Studio
           </span>
         </div>
 
-        {/* Center: pipeline kicker + headline + lede */}
-        <div style={{ marginTop: 'auto', marginBottom: 'auto' }}>
+        {/* Center: pipeline kicker + headline + lede + platform chips */}
+        <div style={{ position: 'relative', zIndex: 1, marginTop: 'auto', marginBottom: 'auto', maxWidth: '28ch' }}>
           <div
             style={{
               fontFamily:    'var(--mono)',
@@ -192,62 +202,87 @@ function LoginForm() {
               letterSpacing: '0.18em',
               textTransform: 'uppercase',
               color:         'rgba(251,250,247,0.5)',
-              marginBottom:  18,
+              marginBottom:  20,
             }}
           >
-            Idea → Approval → Story → Posted
+            Brief <span style={{ color: COBALT_BRIGHT }}>→</span> Approve{' '}
+            <span style={{ color: COBALT_BRIGHT }}>→</span> Design{' '}
+            <span style={{ color: COBALT_BRIGHT }}>→</span> Publish
           </div>
+
           <h1
             style={{
               fontFamily:    'var(--serif)',
               fontSize:      58,
               fontWeight:    500,
-              lineHeight:    1.0,
+              lineHeight:    1.02,
               letterSpacing: '-0.03em',
               color:         'var(--paper)',
               margin:        0,
             }}
           >
-            The whole<br />
-            <span style={{ fontStyle: 'italic' }}>{'“Would You'}<br />{'Rather”'}</span><br />
-            pipeline.
+            One deck<br />
+            for every<br />
+            <span style={{ fontStyle: 'italic' }}>post.</span>
           </h1>
+
           <p
             style={{
               color:      'rgba(251,250,247,0.62)',
               fontSize:   16,
               marginTop:  22,
-              maxWidth:   '38ch',
+              maxWidth:   '29ch',
               lineHeight: 1.6,
             }}
           >
-            From a one-word theme to a posted Instagram Story — generated,
-            approved, designed and published in one place.
+            From a one-line brief to a published carousel — Instagram Stories and
+            LinkedIn posts, generated, approved, designed and shipped in one place.
           </p>
-        </div>
 
-        {/* Tilted StoryFrame — decorative, bottom-right */}
-        <div
-          style={{
-            position:  'absolute',
-            right:     -30,
-            bottom:    -40,
-            transform: 'rotate(8deg)',
-            opacity:   0.96,
-          }}
-        >
-          <StoryFrame
-            imageA={SAMPLE.imageA}
-            imageB={SAMPLE.imageB}
-            optionA={SAMPLE.optionA}
-            optionB={SAMPLE.optionB}
-            width={210}
-          />
+          {/* Platform chips — the two content types PostDeck ships */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 26 }}>
+            {[
+              { label: 'Instagram Stories', dot: 'var(--a)' },
+              { label: 'LinkedIn Posts',    dot: COBALT_BRIGHT },
+            ].map(chip => (
+              <span
+                key={chip.label}
+                style={{
+                  display:       'inline-flex',
+                  alignItems:    'center',
+                  gap:           8,
+                  padding:       '7px 13px 7px 11px',
+                  border:        '1px solid rgba(251,250,247,0.16)',
+                  borderRadius:  999,
+                  fontFamily:    'var(--mono)',
+                  fontSize:      10.5,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color:         'rgba(251,250,247,0.82)',
+                  background:    'rgba(251,250,247,0.03)',
+                }}
+              >
+                <span
+                  style={{
+                    width:        7,
+                    height:       7,
+                    borderRadius: '50%',
+                    flexShrink:   0,
+                    background:   chip.dot,
+                    boxShadow:    `0 0 0 3px color-mix(in oklab, ${chip.dot} 30%, transparent)`,
+                  }}
+                />
+                {chip.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Footer */}
         <div
           style={{
+            position:      'relative',
+            zIndex:        1,
             fontFamily:    'var(--mono)',
             fontSize:      10,
             letterSpacing: '0.14em',
@@ -257,9 +292,246 @@ function LoginForm() {
         >
           Internal content studio · v2
         </div>
+
+        {/* ── The fanned POST DECK — pure CSS + photos, replaces StoryFrame ── */}
+        <div
+          aria-hidden
+          style={{ position: 'absolute', right: -40, bottom: -44, zIndex: 0, width: 230, height: 324 }}
+        >
+          {/* LinkedIn job card — behind, peeking left */}
+          <div
+            style={{
+              position:      'absolute',
+              width:         174,
+              height:        218,
+              left:          6,
+              bottom:        92,
+              transform:     'rotate(-9deg)',
+              background:    'var(--card)',
+              border:        '1px solid var(--hair)',
+              borderRadius:  16,
+              overflow:      'hidden',
+              boxShadow:     'var(--shadow-lg)',
+              display:       'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div style={{ height: 56, position: 'relative', overflow: 'hidden', background: 'oklch(0.45 0.16 266)' }}>
+              <img
+                src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=400&q=80"
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div
+                style={{
+                  position:     'absolute',
+                  inset:        0,
+                  background:   'linear-gradient(135deg, color-mix(in oklab, var(--b) 72%, transparent), color-mix(in oklab, oklch(0.42 0.16 266) 78%, transparent))',
+                  mixBlendMode: 'multiply',
+                }}
+              />
+              <div
+                style={{
+                  position:       'absolute',
+                  left:           16,
+                  bottom:         -18,
+                  width:          44,
+                  height:         44,
+                  borderRadius:   11,
+                  background:     'var(--paper)',
+                  border:         '2px solid var(--card)',
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'center',
+                  fontFamily:     'var(--serif)',
+                  fontWeight:     700,
+                  fontSize:       19,
+                  color:          'var(--b)',
+                  boxShadow:      'var(--shadow-sm)',
+                }}
+              >
+                N
+              </div>
+            </div>
+            <div style={{ padding: '28px 16px 0' }}>
+              <div
+                style={{
+                  fontFamily:    'var(--mono)',
+                  fontSize:      8.5,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color:         'var(--b-ink)',
+                  fontWeight:    700,
+                }}
+              >
+                Now Hiring
+              </div>
+              <div
+                style={{
+                  fontFamily:    'var(--serif)',
+                  fontSize:      18,
+                  fontWeight:    600,
+                  lineHeight:    1.12,
+                  letterSpacing: '-0.01em',
+                  color:         'var(--ink)',
+                  margin:        '7px 0 0',
+                }}
+              >
+                Senior Product Designer
+              </div>
+              <div
+                style={{
+                  fontFamily:    'var(--mono)',
+                  fontSize:      9,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color:         'var(--ink-3)',
+                  marginTop:     9,
+                }}
+              >
+                Remote · Full-time
+              </div>
+            </div>
+            {/* carousel dots */}
+            <div style={{ display: 'flex', gap: 5, position: 'absolute', left: 16, bottom: 14 }}>
+              <i style={{ width: 14, height: 5, borderRadius: 99, background: 'var(--b)', display: 'block' }} />
+              <i style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--hair-2)', display: 'block' }} />
+              <i style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--hair-2)', display: 'block' }} />
+              <i style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--hair-2)', display: 'block' }} />
+            </div>
+          </div>
+
+          {/* Instagram Story "duel" card — front */}
+          <div
+            style={{
+              position:      'absolute',
+              width:         182,
+              height:        324,
+              right:         14,
+              bottom:        8,
+              transform:     'rotate(7deg)',
+              background:    'var(--ink)',
+              borderRadius:  16,
+              overflow:      'hidden',
+              boxShadow:     'var(--shadow-lg)',
+              display:       'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div
+              style={{
+                position:      'absolute',
+                top:           '7%',
+                left:          0,
+                right:         0,
+                textAlign:     'center',
+                zIndex:        3,
+                fontFamily:    'var(--mono)',
+                fontSize:      9.5,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color:         'rgba(255,255,255,0.94)',
+              }}
+            >
+              Would You Rather
+            </div>
+
+            {/* A half — flame */}
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              <img
+                src="https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400&q=80"
+                alt=""
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div style={{ position: 'absolute', inset: 0, background: 'var(--a)', mixBlendMode: 'multiply', opacity: 0.55 }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.04), rgba(0,0,0,0.34))' }} />
+              <div
+                style={{
+                  position:      'absolute',
+                  bottom:        '12%',
+                  left:          0,
+                  right:         0,
+                  padding:       '0 9%',
+                  color:         '#fff',
+                  fontFamily:    'var(--serif)',
+                  fontWeight:    600,
+                  textAlign:     'center',
+                  letterSpacing: '-0.01em',
+                  textShadow:    '0 2px 14px rgba(0,0,0,0.4)',
+                  fontSize:      14,
+                  lineHeight:    1.18,
+                  zIndex:        1,
+                }}
+              >
+                Read minds for a day
+              </div>
+            </div>
+
+            {/* B half — cobalt */}
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              <img
+                src="https://images.unsplash.com/photo-1502685104226-ee32379fefbe?w=400&q=80"
+                alt=""
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div style={{ position: 'absolute', inset: 0, background: 'var(--b)', mixBlendMode: 'multiply', opacity: 0.55 }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.04), rgba(0,0,0,0.34))' }} />
+              <div
+                style={{
+                  position:      'absolute',
+                  top:           '12%',
+                  left:          0,
+                  right:         0,
+                  padding:       '0 9%',
+                  color:         '#fff',
+                  fontFamily:    'var(--serif)',
+                  fontWeight:    600,
+                  textAlign:     'center',
+                  letterSpacing: '-0.01em',
+                  textShadow:    '0 2px 14px rgba(0,0,0,0.4)',
+                  fontSize:      14,
+                  lineHeight:    1.18,
+                  zIndex:        1,
+                }}
+              >
+                Be invisible for a day
+              </div>
+            </div>
+
+            {/* vs disc */}
+            <div
+              style={{
+                position:       'absolute',
+                top:            '50%',
+                left:           '50%',
+                transform:      'translate(-50%, -50%)',
+                zIndex:         4,
+                width:          34,
+                height:         34,
+                borderRadius:   '50%',
+                background:     'var(--paper)',
+                color:          'var(--ink)',
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                fontFamily:     'var(--serif)',
+                fontStyle:      'italic',
+                fontWeight:     600,
+                fontSize:       14,
+                boxShadow:      '0 4px 16px rgba(0,0,0,0.35)',
+                border:         '2px solid #fff',
+                lineHeight:     1,
+              }}
+            >
+              vs
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Right: account picker + form ────────────────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════════════
+          Right: account picker + form  (UNCHANGED)
+          ════════════════════════════════════════════════════════════════════ */}
       <div
         style={{
           display:        'flex',

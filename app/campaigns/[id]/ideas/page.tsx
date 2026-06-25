@@ -418,7 +418,7 @@ export default function IdeasPage() {
             </h2>
 
             <p style={{ color: 'var(--ink-2)', margin: '0 auto 22px', maxWidth: '42ch' }}>
-              We'll draft five "Would You Rather" duels for{' '}
+              We'll draft five story ideas for{' '}
               <em style={{ fontFamily: 'var(--serif)' }}>{campaign?.theme}</em>{' '}
               in your chosen tone.
             </p>

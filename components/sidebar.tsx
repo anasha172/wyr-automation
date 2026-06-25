@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, List, BarChart3,
-  Settings, Users, ShieldCheck,
+  Users, ShieldCheck,
   Lightbulb, Image, Clapperboard, Send,
 } from 'lucide-react'
 import { InstagramIcon, LinkedInIcon } from '@/components/icons'
@@ -137,6 +137,50 @@ function NavItem({ href, icon, label, num, tag, active, disabled, onClick }: Nav
   )
 }
 
+// ─── Channel group (parent label + indented sub-items) ───────────────────────
+
+function ChannelGroup({
+  icon,
+  label,
+  children,
+}: {
+  icon:     React.ReactNode
+  label:    string
+  children: React.ReactNode
+}) {
+  return (
+    <div style={{ marginBottom: 2 }}>
+      {/* Non-clickable channel label */}
+      <div
+        style={{
+          display:    'flex',
+          alignItems: 'center',
+          gap:        10,
+          padding:    '8px 11px 3px',
+        }}
+      >
+        <span style={{ display: 'flex', color: 'var(--ink-3)', flexShrink: 0 }}>
+          {icon}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--sans)',
+            fontSize:   13.5,
+            fontWeight: 600,
+            color:      'var(--ink-2)',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      {/* Indented sub-items */}
+      <div style={{ paddingLeft: 22 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ─── Flow steps shown under open campaign ────────────────────────────────────
 
 const FLOW_STEPS = [
@@ -214,23 +258,21 @@ export function Sidebar() {
           flexShrink:   0,
         }}
       >
-        {/* Serif WYR wordmark — W=flame, Y=cobalt, R=ink */}
+        {/* Serif PostDeck wordmark — Post=ink, Deck=cobalt */}
         <div
           style={{
             fontFamily:    'var(--serif)',
             fontWeight:    700,
-            fontSize:      30,
+            fontSize:      24,
             letterSpacing: '-0.03em',
             lineHeight:    1,
             color:         'var(--ink)',
           }}
         >
-          <span style={{ color: 'var(--a)' }}>W</span>
-          <span style={{ color: 'var(--b)' }}>Y</span>
-          <span>R</span>
+          <span>Post</span><span style={{ color: 'var(--b)' }}>Deck</span>
         </div>
 
-        {/* Stacked mono "WOULD / YOU / RATHER" tag */}
+        {/* Stacked mono "SOCIAL / MEDIA / STUDIO" tag */}
         <div
           style={{
             fontFamily:    'var(--mono)',
@@ -242,7 +284,7 @@ export function Sidebar() {
             marginBottom:  2,
           }}
         >
-          Would<br />You<br />Rather
+          Social<br />Media<br />Studio
         </div>
       </Link>
 
@@ -261,14 +303,6 @@ export function Sidebar() {
           active={pathname === '/'}
         />
 
-        {isPub && (
-          <NavItem
-            href="/campaigns"
-            icon={<List size={16} />}
-            label="All Campaigns"
-            active={pathname === '/campaigns'}
-          />
-        )}
 
         {isMgr && (
           <NavItem
@@ -284,24 +318,24 @@ export function Sidebar() {
           <>
             <SbSection>Channels</SbSection>
 
-            <NavItem
-              href="/campaigns/new"
-              icon={<InstagramIcon size={16} />}
-              label="Instagram"
-              tag="Story"
-              active={
-                pathname === '/campaigns/new' ||
-                (inFlow && !!campaignId)
-              }
-            />
+            <ChannelGroup icon={<InstagramIcon size={16} />} label="Instagram">
+              <NavItem
+                href="/campaigns/new"
+                label="New Campaign"
+                active={
+                  pathname === '/campaigns/new' ||
+                  (inFlow && !!campaignId)
+                }
+              />
+            </ChannelGroup>
 
-            {/* LinkedIn locked */}
-            <NavItem
-              icon={<LinkedInIcon size={16} />}
-              label="LinkedIn"
-              tag="Soon"
-              disabled
-            />
+            <ChannelGroup icon={<LinkedInIcon size={16} />} label="LinkedIn">
+              <NavItem
+                href="/linkedin/new"
+                label="New Post"
+                active={pathname.startsWith('/linkedin')}
+              />
+            </ChannelGroup>
           </>
         )}
 
@@ -342,18 +376,6 @@ export function Sidebar() {
           </>
         )}
 
-        {/* ACCOUNT — non-admin */}
-        {role !== 'admin' && (
-          <>
-            <SbSection>Account</SbSection>
-            <NavItem
-              href="/settings"
-              icon={<Settings size={16} />}
-              label="Settings"
-              active={pathname === '/settings'}
-            />
-          </>
-        )}
       </nav>
 
     </aside>

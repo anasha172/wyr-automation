@@ -9,68 +9,83 @@ async function requireAdmin() {
   return user
 }
 
-// GET /api/admin/users — list all users
+// GET /api/admin/users — list all users with team / manager / slack info
 export async function GET() {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const service = createServiceClient()
-  const { data: { users }, error } = await service.auth.admin.listUsers({ perPage: 200 })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fetch slack_user_ids from user_settings for managers/admins
-  const managerIds = users
-    .filter(u => ['manager', 'admin'].includes(u.user_metadata?.role ?? 'publisher'))
-    .map(u => u.id)
+  const [
+    { data: { users }, error: authErr },
+    { data: profiles },
+    { data: teamsData },
+  ] = await Promise.all([
+    service.auth.admin.listUsers({ perPage: 200 }),
+    service.from('user_profiles').select('id, team_id, manager_id, slack_user_id'),
+    service.from('teams').select('id, name'),
+  ])
 
-  let slackMap: Record<string, string | null> = {}
-  if (managerIds.length > 0) {
-    const { data: settings } = await service
-      .from('user_settings')
-      .select('user_id, slack_user_id')
-      .in('user_id', managerIds)
-    settings?.forEach((s: any) => { slackMap[s.user_id] = s.slack_user_id ?? null })
-  }
+  if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 })
 
-  const list = users.map(u => ({
-    id: u.id,
-    email: u.email ?? '',
-    full_name: u.user_metadata?.full_name ?? '',
-    role: u.user_metadata?.role ?? 'publisher',
-    created_at: u.created_at,
-    slack_user_id: slackMap[u.id] ?? null,
-  }))
+  const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]))
+  const teamMap    = Object.fromEntries((teamsData  ?? []).map((t: any) => [t.id, t.name]))
+
+  const list = users.map(u => {
+    const profile = profileMap[u.id] ?? {}
+    return {
+      id:           u.id,
+      email:        u.email ?? '',
+      full_name:    u.user_metadata?.full_name ?? '',
+      role:         u.user_metadata?.role ?? 'publisher',
+      created_at:   u.created_at,
+      team_id:      profile.team_id      ?? null,
+      team_name:    profile.team_id ? (teamMap[profile.team_id] ?? null) : null,
+      manager_id:   profile.manager_id   ?? null,
+      slack_user_id: profile.slack_user_id ?? null,
+    }
+  })
 
   return NextResponse.json(list)
 }
 
-// PATCH /api/admin/users  { id, full_name?, role?, slack_user_id?, password? }
+// PATCH /api/admin/users
+// Body: { id, full_name?, role?, slack_user_id?, team_id?, manager_id?, password? }
 export async function PATCH(req: NextRequest) {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { id, full_name, role, slack_user_id, password } = await req.json()
+  const { id, full_name, role, slack_user_id, team_id, manager_id, password } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const service = createServiceClient()
 
-  // Update user metadata (name/role)
-  if (full_name !== undefined || role) {
+  // 1. Update auth metadata (name / role)
+  if (full_name !== undefined || role !== undefined) {
     const { data: existing } = await service.auth.admin.getUserById(id)
-    const merged = { ...existing?.user?.user_metadata, ...(full_name !== undefined ? { full_name } : {}), ...(role ? { role } : {}) }
+    const merged = {
+      ...existing?.user?.user_metadata,
+      ...(full_name !== undefined ? { full_name } : {}),
+      ...(role      !== undefined ? { role }      : {}),
+    }
     const { error } = await service.auth.admin.updateUserById(id, { user_metadata: merged })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  // Update slack_user_id in user_settings
-  if (slack_user_id !== undefined) {
+  // 2. Update user_profiles (team / manager / slack)
+  const profileUpdates: Record<string, unknown> = {}
+  if (slack_user_id !== undefined) profileUpdates.slack_user_id = slack_user_id || null
+  if (team_id       !== undefined) profileUpdates.team_id       = team_id       || null
+  if (manager_id    !== undefined) profileUpdates.manager_id    = manager_id    || null
+
+  if (Object.keys(profileUpdates).length > 0) {
     const { error } = await service
-      .from('user_settings')
-      .upsert({ user_id: id, slack_user_id: slack_user_id || null }, { onConflict: 'user_id' })
+      .from('user_profiles')
+      .upsert({ id, ...profileUpdates }, { onConflict: 'id' })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  // Change password
+  // 3. Change password
   if (password !== undefined) {
     if (!password || password.length < 8) {
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
